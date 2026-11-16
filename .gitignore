@@ -1,0 +1,22 @@
+# .NET
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Vue / Node
+**/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
+
+# Paikalliset ympäristömuuttujat
+.env
+.env.*
+!.env.example
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
