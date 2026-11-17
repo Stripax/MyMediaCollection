@@ -1,0 +1,19 @@
+{
+  "sidebar": {
+    "categories": "Kategoriat",
+    "hide": "Piilota sivupalkki",
+    "show": "Avaa sivupalkki",
+    "all": "Kaikki",
+    "movies": "Elokuvat",
+    "tvSeries": "TV-sarjat",
+    "videoGames": "Videopelit",
+    "boardGames": "Lautapelit"
+  },
+  "settings": "Sovelluksen asetukset",
+  "language": "Kieli",
+  "selectLanguage": "Valitse kieli",
+  "darkMode": "Tumma tila",
+  "title": "Minun Kokoelmani",
+  "header": "Tervetuloa sovellukseen \"Minun Kokoelmani\".",
+  "description": "Tämä on sovellus, jonka avulla voit hallita ja listata kokoelmasi helposti.\nSovelluksen tarkoitus on toimia apurina kokoelman hallinnassa ja tarjota käyttäjälle selkeä näkymä kokoelmaan liittyvistä tiedoista.\nSovellus on harjoitusprojekti, joka on toteutettu Vue 3 -kehitysympäristössä ja hyödyntää Composition API:ta.\nKäyttäjä voi lisätä, muokata ja poistaa kohteita kokoelmastaan sekä selata niitä eri näkymissä.\nSovellus tukee useita kieliä ja tarjoaa mahdollisuuden vaihtaa kieltä käyttöliittymässä.\nLisäksi sovellus sisältää tumman tilan, joka voidaan aktivoida käyttäjän mieltymyksen mukaan.\n\nSovelluksen luonnissa on käytetty ChatGPT tekoälyä."
+}

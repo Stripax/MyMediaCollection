@@ -1,0 +1,145 @@
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  padding: 1rem clamp(1rem, 4vw, 3rem);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.settings,
+.theme-setting {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.settings {
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+}
+
+.theme-setting {
+  position: relative;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.theme-setting input {
+  position: absolute;
+  right: 0;
+  width: 3.5rem;
+  height: 2rem;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  width: 3.5rem;
+  height: 2rem;
+  border-radius: 1rem;
+  background: var(--switch-background);
+  pointer-events: none;
+}
+
+.switch-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0.25rem;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #17243a;
+}
+
+.switch-thumb svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.theme-setting input:checked + .switch-track {
+  background: var(--accent);
+}
+
+.theme-setting input:checked + .switch-track .switch-thumb {
+  transform: translateX(1.5rem);
+}
+
+.theme-setting input:focus-visible + .switch-track {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.language-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.language-chevron {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.language-trigger[data-state='open'] {
+  border-color: var(--accent);
+}
+
+.language-positioner {
+  z-index: 10;
+}
+
+.language-menu {
+  min-width: 12rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 24px #00000024;
+}
+
+.language-menu:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.language-menu-label {
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.language-menu-separator {
+  height: 1px;
+  margin: 0.25rem 0;
+  border: 0;
+  background: var(--border);
+}
+
+.language-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+.language-menu-item[data-highlighted] {
+  background: var(--page-background);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

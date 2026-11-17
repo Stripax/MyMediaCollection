@@ -1,0 +1,19 @@
+{
+  "sidebar": {
+    "categories": "Categories",
+    "hide": "Hide sidebar",
+    "show": "Show sidebar",
+    "all": "All",
+    "movies": "Movies",
+    "tvSeries": "TV series",
+    "videoGames": "Video games",
+    "boardGames": "Board games"
+  },
+  "settings": "Application settings",
+  "language": "Language",
+  "selectLanguage": "Select language",
+  "darkMode": "Dark mode",
+  "title": "My Collection",
+  "header": "Welcome to the application \"My Collection\".",
+  "description": "This application makes it easy to manage and list your collection.\nIt is designed to help you manage your collection and provide a clear overview of information about it.\nThe application is a practice project built with Vue 3 using the Composition API.\nYou can add, edit, and delete items in your collection and browse them in different views.\nThe application supports multiple languages and lets you change the language in the interface.\nIt also includes a dark mode that you can enable according to your preference.\n\nChatGPT AI was used to help create this application."
+}
