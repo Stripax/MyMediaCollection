@@ -1,4 +1,20 @@
 {
+  "itemForm": {
+    "testButton": "Testaa lisäyslomaketta",
+    "title": "Kokoelman kohde",
+    "description": "Täytä kohteen tiedot ja lisää se kokoelmaasi tallentamalla.",
+    "save": "Tallenna",
+    "saving": "Tallennetaan…",
+    "saved": "Kohde tallennettiin kokoelmaan.",
+    "nameRequired": "Anna kohteelle nimi.",
+    "validationError": "Tarkista nimi, kategoria ja median tyyppi. Lisätietojen enimmäispituus on 10 000 merkkiä.",
+    "saveError": "Tallennus epäonnistui. Tarkista yhteys ja yritä uudelleen.",
+    "category": "Kokoelman kategoria",
+    "name": "Nimi",
+    "mediaFormat": "Median tyyppi",
+    "info": "Lisätiedot",
+    "close": "Sulje"
+  },
   "sidebar": {
     "categories": "Kategoriat",
     "hide": "Piilota sivupalkki",

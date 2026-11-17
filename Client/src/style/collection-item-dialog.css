@@ -1,0 +1,107 @@
+.collection-test-button {
+  margin-top: 1rem;
+}
+
+.item-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #00000080;
+}
+
+.item-dialog-positioner {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.item-dialog {
+  width: 100%;
+  max-width: 32rem;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 48px #00000040;
+}
+
+.item-dialog-title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.item-dialog-description {
+  margin: 0.75rem 0 1.5rem;
+  line-height: 1.5;
+}
+
+.item-form,
+.item-form-fields {
+  display: grid;
+  gap: 1rem;
+}
+
+.item-form-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.item-form-error {
+  margin: 0;
+  color: var(--text);
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+}
+
+.item-form :disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.item-form-field {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.item-form-field input,
+.item-form-field select,
+.item-form-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--page-background);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.item-form-field textarea {
+  resize: vertical;
+}
+
+.item-form-field input:focus-visible,
+.item-form-field textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.item-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}

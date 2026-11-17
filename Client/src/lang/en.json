@@ -1,4 +1,20 @@
 {
+  "itemForm": {
+    "testButton": "Test item form",
+    "title": "Collection item",
+    "description": "Enter the item details and save it to your collection.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "The item was saved to your collection.",
+    "nameRequired": "Enter a name for the item.",
+    "validationError": "Check the name, category and media format. Additional information is limited to 10,000 characters.",
+    "saveError": "Saving failed. Check your connection and try again.",
+    "category": "Collection category",
+    "name": "Name",
+    "mediaFormat": "Media format",
+    "info": "Additional information",
+    "close": "Close"
+  },
   "sidebar": {
     "categories": "Categories",
     "hide": "Hide sidebar",
