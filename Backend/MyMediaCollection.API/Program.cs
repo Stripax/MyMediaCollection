@@ -1,4 +1,5 @@
 using MyMediaCollection.API.Data;
+using MyMediaCollection.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -6,6 +7,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddScoped<CollectionRepository>();
+builder.Services.AddHttpClient<TmdbClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Tmdb:BaseUrl"] ?? "https://api.themoviedb.org/3/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).RemoveAllLoggers(); // API-key authentication uses a query parameter; never log request URLs.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 

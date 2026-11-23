@@ -1,0 +1,263 @@
+.collection-section {
+  margin-top: 2rem;
+}
+
+.collection-instructions {
+  margin: 0 0 1.25rem;
+  line-height: 1.6;
+}
+
+.collection-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.collection-search {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  flex: 1 1 20rem;
+  max-width: 36rem;
+}
+
+.collection-search-field {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.collection-search-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.collection-search-field input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.collection-search button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.collection-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.collection-table-scroll:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.collection-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.collection-table tbody {
+  position: relative;
+}
+
+.collection-item-row {
+  background-color: var(--surface);
+  transition: background-color 200ms ease-in-out;
+}
+
+.collection-row-move,
+.collection-row-enter-active {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease-out,
+    background-color 200ms ease-in-out;
+}
+
+.collection-row-leave-active {
+  z-index: 1;
+  background: var(--surface);
+  pointer-events: none;
+  transition:
+    transform 180ms ease-in,
+    opacity 180ms ease-in,
+    background-color 200ms ease-in-out;
+}
+
+.collection-row-enter-from {
+  opacity: 0;
+  transform: translateY(-0.5rem);
+}
+
+.collection-row-leave-to {
+  opacity: 0;
+  transform: translateY(0.5rem);
+}
+
+.collection-table th,
+.collection-table td {
+  padding: 0.875rem 1rem;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  min-width: 8rem;
+}
+
+.collection-table th {
+  background: var(--page-background);
+}
+
+.collection-table td:first-child {
+  font-weight: 600;
+}
+
+.collection-item-row:hover,
+.collection-item-row:focus-within {
+  background-color: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.collection-name-button {
+  min-height: 2.75rem;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+}
+
+.collection-name-button:hover {
+  text-decoration-thickness: 2px;
+}
+
+.collection-poster {
+  float: left;
+  width: 48px;
+  height: 72px;
+  margin-right: 0.75rem;
+  object-fit: cover;
+  border-radius: 0.25rem;
+}
+
+.collection-table .collection-info {
+  white-space: pre-line;
+  min-width: 12rem;
+}
+
+.collection-table .collection-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-weight: 400;
+}
+
+.collection-error {
+  margin-bottom: 1rem;
+}
+
+.collection-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 6rem;
+}
+
+.collection-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  padding: 0.5rem;
+}
+
+.collection-icon-button:hover:not(:disabled) {
+  background: var(--page-background);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.collection-edit-button {
+  --edit-color: #1d4ed8;
+  --edit-hover-background: #dbeafe;
+  color: var(--edit-color);
+}
+
+:root:is([data-theme='dark'], [data-theme='black']) .collection-edit-button {
+  --edit-color: #60a5fa;
+  --edit-hover-background: #172f4d;
+}
+
+.collection-edit-button:hover:not(:disabled) {
+  background: var(--edit-hover-background);
+  border-color: var(--edit-color);
+  color: var(--edit-color);
+}
+
+.collection-edit-button:focus-visible {
+  outline-color: var(--edit-color);
+}
+
+.collection-delete-button {
+  --delete-color: #b91c1c;
+  --delete-hover-background: #fee2e2;
+  color: var(--delete-color);
+}
+
+:root:is([data-theme='dark'], [data-theme='black']) .collection-delete-button {
+  --delete-color: #fb7185;
+  --delete-hover-background: #431c23;
+}
+
+.collection-delete-button:hover:not(:disabled) {
+  background: var(--delete-hover-background);
+  border-color: var(--delete-color);
+  color: var(--delete-color);
+}
+
+.collection-delete-button:focus-visible {
+  outline-color: var(--delete-color);
+}
+
+.collection-icon-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.collection-action-tooltip .toolbar-tooltip-content {
+  top: auto;
+  bottom: calc(100% + 0.625rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collection-item-row,
+  .collection-row-move,
+  .collection-row-enter-active,
+  .collection-row-leave-active {
+    transition: none;
+  }
+
+  .collection-row-enter-from,
+  .collection-row-leave-to {
+    transform: none;
+  }
+}

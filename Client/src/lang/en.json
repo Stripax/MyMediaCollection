@@ -1,19 +1,87 @@
 {
+  "snackbar": {
+    "notifications": "Notifications",
+    "close": "Dismiss notification"
+  },
+  "common": {
+    "other": "Other"
+  },
+  "gameTypes": {
+    "boardGame": "Board game",
+    "cardGame": "Card game",
+    "otherGame": "Other game"
+  },
+  "collection": {
+    "editTitles": {
+      "all": "Edit item",
+      "movies": "Edit movie",
+      "tvSeries": "Edit TV series",
+      "videoGames": "Edit video game",
+      "boardGames": "Edit board or card game"
+    },
+    "formatOrPlatform": "Format / Platform",
+    "allTitle": "Entire collection",
+    "add": {
+      "all": "Add a new item",
+      "movies": "Add a new movie",
+      "tvSeries": "Add a new TV series",
+      "videoGames": "Add a new video game",
+      "boardGames": "Add a new board or card game"
+    },
+    "instructions": "{action} using the button below. Use the buttons in each table row to edit or delete items, and the search field to find items by name.",
+    "searchLabel": "Search by name",
+    "searchPlaceholder": "Enter an item name…",
+    "clearSearch": "Clear search",
+    "searchResults": "Search results: {count}",
+    "noMatches": "No matching items were found in the selected category.",
+    "actions": "Actions",
+    "edit": "Edit",
+    "editItem": "Edit item {name}",
+    "delete": "Delete",
+    "deleteItem": "Delete item {name}",
+    "deleteTitle": "Delete collection item",
+    "deleteConfirmation": "Are you sure you want to delete “{name}”? This cannot be undone.",
+    "cancel": "Cancel",
+    "deleting": "Deleting…",
+    "deleted": "The item was deleted from your collection.",
+    "deleteError": "Deleting failed. Please try again.",
+    "title": "Collection items",
+    "loading": "Loading collection…",
+    "loadError": "Could not load the collection. Please try again.",
+    "retry": "Try again",
+    "empty": "There are no items in your collection yet.",
+    "emptyCategory": "There are no items in this category yet.",
+    "unknown": "Unknown category"
+  },
   "itemForm": {
-    "testButton": "Test item form",
+    "gameType": "Game type",
+    "chooseGameType": "Select a game type",
+    "gameTypeRequired": "Select board game, card game or other game.",
+    "store": "Store",
+    "chooseStore": "Select a game store",
+    "storeRequired": "Select the store for the PC game.",
+    "platform": "Platform",
+    "choosePlatform": "Select a platform",
+    "platformRequired": "Select a platform for the game.",
+    "editTitle": "Edit collection item",
+    "editDescription": "Edit the item details and save your changes.",
+    "updated": "Your changes were saved.",
+    "notFound": "This item no longer exists. Close the dialog and reload the collection.",
+    "chooseFormat": "Choose a media format",
     "title": "Collection item",
     "description": "Enter the item details and save it to your collection.",
-    "save": "Save",
+    "add": "Add",
+    "saveChanges": "Save changes",
     "saving": "Saving…",
     "saved": "The item was saved to your collection.",
     "nameRequired": "Enter a name for the item.",
-    "validationError": "Check the name, category and media format. Additional information is limited to 10,000 characters.",
+    "validationError": "Check the name, category, format or platform and the store for PC games. Additional information is limited to 10,000 characters.",
     "saveError": "Saving failed. Check your connection and try again.",
     "category": "Collection category",
     "name": "Name",
-    "mediaFormat": "Media format",
+    "mediaFormat": "Format",
     "info": "Additional information",
-    "close": "Close"
+    "close": "Cancel"
   },
   "sidebar": {
     "categories": "Categories",
@@ -23,7 +91,15 @@
     "movies": "Movies",
     "tvSeries": "TV series",
     "videoGames": "Video games",
-    "boardGames": "Board games"
+    "boardGames": "Board and card games"
+  },
+  "topBar": {
+    "login": "Login",
+    "themesAndInfo": "Themes and information",
+    "themes": "Themes",
+    "languages": "Languages",
+    "lightMode": "Light mode",
+    "blackMode": "Black mode"
   },
   "settings": "Application settings",
   "language": "Language",
@@ -31,5 +107,31 @@
   "darkMode": "Dark mode",
   "title": "My Collection",
   "header": "Welcome to the application \"My Collection\".",
-  "description": "This application makes it easy to manage and list your collection.\nIt is designed to help you manage your collection and provide a clear overview of information about it.\nThe application is a practice project built with Vue 3 using the Composition API.\nYou can add, edit, and delete items in your collection and browse them in different views.\nThe application supports multiple languages and lets you change the language in the interface.\nIt also includes a dark mode that you can enable according to your preference.\n\nChatGPT AI was used to help create this application."
+  "description": "This application makes it easy to manage and list your collection.\nIt is designed to help you manage your collection and provide a clear overview of information about it.\nThe application is a practice project built with Vue 3 using the Composition API.\nYou can add, edit, and delete items in your collection and browse them in different views.\nThe application supports multiple languages and lets you change the language in the interface.\nIt also includes a dark mode that you can enable according to your preference.\n\nChatGPT AI was used to help create this application.",
+  "tmdb": {
+    "add": "Add with TMDB search",
+    "title": "Add a movie or TV series with TMDB",
+    "description": "Search by name, select the correct title and enter the details of your own copy. You can also keep using the manual form.",
+    "searchLabel": "Movie or TV series name",
+    "searchPlaceholder": "Enter a search term…",
+    "search": "Search TMDB",
+    "searching": "Searching…",
+    "results": "Search results",
+    "select": "Select",
+    "noResults": "No results found. Try another name or add the item manually.",
+    "noPoster": "No poster",
+    "noOverview": "No overview is available in this language.",
+    "viewSource": "View on TMDB",
+    "changeSelection": "Choose a different title",
+    "pages": "Search result pages",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page} / {total}",
+    "credits": "Data source and credits",
+    "notConfigured": "TMDB search has not been configured yet. You can add the item manually.",
+    "credentialsError": "TMDB authentication failed. Check the API key in the backend settings.",
+    "rateLimited": "TMDB request limit reached. Wait a moment and try again.",
+    "notFound": "The selected title is no longer available on TMDB. Search again.",
+    "requestError": "The TMDB request failed. Try again or add the item manually."
+  }
 }

@@ -1,19 +1,87 @@
 {
+  "snackbar": {
+    "notifications": "Ilmoitukset",
+    "close": "Sulje ilmoitus"
+  },
+  "common": {
+    "other": "Muu"
+  },
+  "gameTypes": {
+    "boardGame": "Lautapeli",
+    "cardGame": "Korttipeli",
+    "otherGame": "Muu peli"
+  },
+  "collection": {
+    "editTitles": {
+      "all": "Muokkaa kohdetta",
+      "movies": "Muokkaa elokuvaa",
+      "tvSeries": "Muokkaa TV-sarjaa",
+      "videoGames": "Muokkaa videopeliä",
+      "boardGames": "Muokkaa lauta- tai korttipeliä"
+    },
+    "formatOrPlatform": "Formaatti / Alusta",
+    "allTitle": "Koko kokoelma",
+    "add": {
+      "all": "Lisää uusi kohde",
+      "movies": "Lisää uusi elokuva",
+      "tvSeries": "Lisää uusi TV-sarja",
+      "videoGames": "Lisää uusi videopeli",
+      "boardGames": "Lisää uusi lauta- tai korttipeli"
+    },
+    "instructions": "{action} alla olevalla painikkeella. Taulukon kohteita voi muokata ja poistaa rivien painikkeilla. Hakukentällä voit hakea kohteita nimen perusteella.",
+    "searchLabel": "Hae nimen perusteella",
+    "searchPlaceholder": "Kirjoita kohteen nimi…",
+    "clearSearch": "Tyhjennä haku",
+    "searchResults": "Hakutuloksia: {count}",
+    "noMatches": "Hakua vastaavia kohteita ei löytynyt valitusta kategoriasta.",
+    "actions": "Toiminnot",
+    "edit": "Muokkaa",
+    "editItem": "Muokkaa kohdetta {name}",
+    "delete": "Poista",
+    "deleteItem": "Poista kohde {name}",
+    "deleteTitle": "Poista kokoelman kohde",
+    "deleteConfirmation": "Haluatko varmasti poistaa kohteen ”{name}”? Poistoa ei voi perua.",
+    "cancel": "Peruuta",
+    "deleting": "Poistetaan…",
+    "deleted": "Kohde poistettiin kokoelmasta.",
+    "deleteError": "Poistaminen epäonnistui. Yritä uudelleen.",
+    "title": "Kokoelman kohteet",
+    "loading": "Ladataan kokoelmaa…",
+    "loadError": "Kokoelman lataaminen epäonnistui. Yritä uudelleen.",
+    "retry": "Yritä uudelleen",
+    "empty": "Kokoelmassa ei ole vielä kohteita.",
+    "emptyCategory": "Tässä kategoriassa ei ole vielä kohteita.",
+    "unknown": "Tuntematon kategoria"
+  },
   "itemForm": {
-    "testButton": "Testaa lisäyslomaketta",
+    "gameType": "Pelityyppi",
+    "chooseGameType": "Valitse pelityyppi",
+    "gameTypeRequired": "Valitse lautapeli, korttipeli tai muu peli.",
+    "store": "Kauppa",
+    "chooseStore": "Valitse pelikauppa",
+    "storeRequired": "Valitse PC-pelin kauppa.",
+    "platform": "Alusta",
+    "choosePlatform": "Valitse alusta",
+    "platformRequired": "Valitse pelille alusta.",
+    "editTitle": "Muokkaa kokoelman kohdetta",
+    "editDescription": "Muokkaa kohteen tietoja ja tallenna muutokset.",
+    "updated": "Kohteen muutokset tallennettiin.",
+    "notFound": "Kohdetta ei enää löydy. Sulje ikkuna ja päivitä kokoelma.",
+    "chooseFormat": "Valitse median tyyppi",
     "title": "Kokoelman kohde",
     "description": "Täytä kohteen tiedot ja lisää se kokoelmaasi tallentamalla.",
-    "save": "Tallenna",
+    "add": "Lisää",
+    "saveChanges": "Tallenna muutokset",
     "saving": "Tallennetaan…",
     "saved": "Kohde tallennettiin kokoelmaan.",
     "nameRequired": "Anna kohteelle nimi.",
-    "validationError": "Tarkista nimi, kategoria ja median tyyppi. Lisätietojen enimmäispituus on 10 000 merkkiä.",
+    "validationError": "Tarkista nimi, kategoria, formaatti tai alusta sekä PC-pelin kauppa. Lisätietojen enimmäispituus on 10 000 merkkiä.",
     "saveError": "Tallennus epäonnistui. Tarkista yhteys ja yritä uudelleen.",
     "category": "Kokoelman kategoria",
     "name": "Nimi",
-    "mediaFormat": "Median tyyppi",
+    "mediaFormat": "Formaatti",
     "info": "Lisätiedot",
-    "close": "Sulje"
+    "close": "Peruuta"
   },
   "sidebar": {
     "categories": "Kategoriat",
@@ -23,7 +91,15 @@
     "movies": "Elokuvat",
     "tvSeries": "TV-sarjat",
     "videoGames": "Videopelit",
-    "boardGames": "Lautapelit"
+    "boardGames": "Lauta- ja korttipelit"
+  },
+  "topBar": {
+    "login": "Kirjautuminen",
+    "themesAndInfo": "Teemat ja lisätiedot",
+    "themes": "Teemat",
+    "languages": "Kielet",
+    "lightMode": "Vaalea tila",
+    "blackMode": "Musta tila"
   },
   "settings": "Sovelluksen asetukset",
   "language": "Kieli",
@@ -31,5 +107,31 @@
   "darkMode": "Tumma tila",
   "title": "Minun Kokoelmani",
   "header": "Tervetuloa sovellukseen \"Minun Kokoelmani\".",
-  "description": "Tämä on sovellus, jonka avulla voit hallita ja listata kokoelmasi helposti.\nSovelluksen tarkoitus on toimia apurina kokoelman hallinnassa ja tarjota käyttäjälle selkeä näkymä kokoelmaan liittyvistä tiedoista.\nSovellus on harjoitusprojekti, joka on toteutettu Vue 3 -kehitysympäristössä ja hyödyntää Composition API:ta.\nKäyttäjä voi lisätä, muokata ja poistaa kohteita kokoelmastaan sekä selata niitä eri näkymissä.\nSovellus tukee useita kieliä ja tarjoaa mahdollisuuden vaihtaa kieltä käyttöliittymässä.\nLisäksi sovellus sisältää tumman tilan, joka voidaan aktivoida käyttäjän mieltymyksen mukaan.\n\nSovelluksen luonnissa on käytetty ChatGPT tekoälyä."
+  "description": "Tämä on sovellus, jonka avulla voit hallita ja listata kokoelmasi helposti.\nSovelluksen tarkoitus on toimia apurina kokoelman hallinnassa ja tarjota käyttäjälle selkeä näkymä kokoelmaan liittyvistä tiedoista.\nSovellus on harjoitusprojekti, joka on toteutettu Vue 3 -kehitysympäristössä ja hyödyntää Composition API:ta.\nKäyttäjä voi lisätä, muokata ja poistaa kohteita kokoelmastaan sekä selata niitä eri näkymissä.\nSovellus tukee useita kieliä ja tarjoaa mahdollisuuden vaihtaa kieltä käyttöliittymässä.\nLisäksi sovellus sisältää tumman tilan, joka voidaan aktivoida käyttäjän mieltymyksen mukaan.\n\nSovelluksen luonnissa on käytetty ChatGPT tekoälyä.",
+  "tmdb": {
+    "add": "Lisää TMDB-haulla",
+    "title": "Lisää elokuva tai TV-sarja TMDB-haulla",
+    "description": "Hae nimellä, valitse oikea teos ja täydennä oman kappaleesi tiedot. Voit edelleen käyttää myös manuaalista lisäyslomaketta.",
+    "searchLabel": "Elokuvan tai TV-sarjan nimi",
+    "searchPlaceholder": "Kirjoita hakusana…",
+    "search": "Hae TMDB:stä",
+    "searching": "Haetaan…",
+    "results": "Hakutulokset",
+    "select": "Valitse",
+    "noResults": "Hakutuloksia ei löytynyt. Kokeile toista nimeä tai lisää kohde manuaalisesti.",
+    "noPoster": "Ei kansikuvaa",
+    "noOverview": "Kuvausta ei ole saatavilla tällä kielellä.",
+    "viewSource": "Näytä TMDB:ssä",
+    "changeSelection": "Vaihda valittua teosta",
+    "pages": "Hakutulosten sivut",
+    "previous": "Edellinen",
+    "next": "Seuraava",
+    "page": "Sivu {page} / {total}",
+    "credits": "Tietolähde ja tekijätiedot",
+    "notConfigured": "TMDB-hakua ei ole vielä otettu käyttöön. Voit lisätä kohteen manuaalisesti.",
+    "credentialsError": "TMDB-tunnistautuminen epäonnistui. Tarkista backendin API-avain.",
+    "rateLimited": "TMDB:n hakuraja ylittyi. Odota hetki ja yritä uudelleen.",
+    "notFound": "Valittua teosta ei löydy TMDB:stä. Tee uusi haku.",
+    "requestError": "TMDB-pyyntö epäonnistui. Yritä uudelleen tai lisää kohde manuaalisesti."
+  }
 }

@@ -1,36 +1,27 @@
 <script setup lang="ts">
 import { Menu } from '@ark-ui/vue/menu'
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import ToolbarTooltip from './ToolbarTooltip.vue'
+import ToolbarIcon from './ToolbarIcon.vue'
 
 const { t, locale } = useI18n({ useScope: 'global' })
 const languages = [
   { code: 'en', name: 'English', flag: '🇬🇧' },
   { code: 'fi', name: 'Suomi', flag: '🇫🇮' },
 ] as const
-const selectedLanguage = computed(
-  () => languages.find((language) => language.code === locale.value) ?? languages[0],
-)
 </script>
 
 <template>
   <Menu.Root :positioning="{ placement: 'bottom-end', gutter: 8 }" lazy-mount>
-    <Menu.Trigger class="language-trigger">
-      <span aria-hidden="true">{{ selectedLanguage.flag }}</span>
-      <span :lang="selectedLanguage.code">{{ selectedLanguage.name }}</span>
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        class="language-chevron"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+    <ToolbarTooltip v-slot="{ describedby }" :text="t('topBar.languages')">
+      <Menu.Trigger
+        class="language-trigger toolbar-button toolbar-icon-button"
+        :aria-label="t('selectLanguage')"
+        :aria-describedby="describedby"
       >
-        <path d="m6 9 6 6 6-6" />
-      </svg>
-    </Menu.Trigger>
+        <ToolbarIcon name="language" />
+      </Menu.Trigger>
+    </ToolbarTooltip>
     <Teleport to="body">
       <Menu.Positioner class="language-positioner">
         <Menu.Content class="language-menu" :aria-label="t('selectLanguage')">

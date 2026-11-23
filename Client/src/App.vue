@@ -1,23 +1,33 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { computed } from 'vue'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from './components/TopBar.vue'
 import SideBar from './components/SideBar.vue'
-import CollectionItemDialog from './components/CollectionItemDialog.vue'
+import AppSnackbar from './components/AppSnackbar.vue'
+import type { CollectionCategory } from './models/collection'
 
-const { t } = useI18n({ useScope: 'global' })
+const route = useRoute()
+const router = useRouter()
+const selectedCategory = computed(() => (route.params.category || 'all') as CollectionCategory)
+
+function openCollection(category: CollectionCategory) {
+  router.push({ name: 'collection', params: { category } })
+}
 </script>
 
 <template>
   <TopBar />
-
   <div class="app-layout">
-    <SideBar />
+    <SideBar
+      :model-value="selectedCategory"
+      :active="route.name === 'collection'"
+      @select="openCollection"
+    />
     <main>
-      <h1>{{ t('header') }}</h1>
-      <p class="description">{{ t('description') }}</p>
-      <CollectionItemDialog />
+      <RouterView />
     </main>
   </div>
+  <AppSnackbar />
 </template>
 
 <style src="./style/app.css"></style>

@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { Menu } from '@ark-ui/vue/menu'
+import ToolbarTooltip from './ToolbarTooltip.vue'
+import ToolbarIcon from './ToolbarIcon.vue'
+import ThemePreview from './ThemePreview.vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 import LanguageSelector from './LanguageSelector.vue'
 
 // Language preference is stored in localStorage, but if it's not available, the default is English.
@@ -23,7 +28,8 @@ function savePreference(key: string, value: string) {
 }
 
 language.value = readPreference('mmc-language') === 'fi' ? 'fi' : 'en'
-const darkMode = ref(readPreference('mmc-theme') === 'dark')
+const savedTheme = readPreference('mmc-theme')
+const theme = ref(savedTheme === 'dark' || savedTheme === 'black' ? savedTheme : 'light')
 
 watch(
   language,
@@ -36,11 +42,10 @@ watch(
 )
 
 watch(
-  darkMode,
+  theme,
   (value) => {
-    const theme = value ? 'dark' : 'light'
-    document.documentElement.dataset.theme = theme
-    savePreference('mmc-theme', theme)
+    document.documentElement.dataset.theme = value
+    savePreference('mmc-theme', value)
   },
   { immediate: true },
 )
@@ -48,35 +53,67 @@ watch(
 
 <template>
   <header class="top-bar">
-    <span class="brand">{{ t('title') }}</span>
+    <RouterLink class="brand" :to="{ name: 'home' }">{{ t('title') }}</RouterLink>
 
     <div class="settings" role="group" :aria-label="t('settings')">
+      <ToolbarTooltip v-slot="{ describedby }" text="Github">
+        <a
+          class="toolbar-button toolbar-icon-button"
+          href="https://github.com/Stripax/MyMediaCollection"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Github"
+          :aria-describedby="describedby"
+        >
+          <ToolbarIcon name="github" />
+        </a>
+      </ToolbarTooltip>
       <LanguageSelector />
-
-      <label class="theme-setting">
-        <span>{{ t('darkMode') }}</span>
-        <input v-model="darkMode" type="checkbox" role="switch" />
-        <span class="switch-track" aria-hidden="true">
-          <span class="switch-thumb">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.75"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path v-if="darkMode" d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z" />
-              <template v-else>
-                <circle cx="12" cy="12" r="4" />
-                <path
-                  d="M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"
-                />
-              </template>
-            </svg>
-          </span>
-        </span>
-      </label>
+      <Menu.Root :positioning="{ placement: 'bottom-end', gutter: 8 }" lazy-mount>
+        <ToolbarTooltip v-slot="{ describedby }" :text="t('topBar.themesAndInfo')">
+          <Menu.Trigger
+            class="toolbar-button toolbar-icon-button theme-trigger"
+            :aria-label="t('topBar.themesAndInfo')"
+            :aria-describedby="describedby"
+          >
+            <ToolbarIcon name="settings" />
+          </Menu.Trigger>
+        </ToolbarTooltip>
+        <Teleport to="body">
+          <Menu.Positioner class="language-positioner">
+            <Menu.Content class="language-menu theme-menu" :aria-label="t('topBar.themes')">
+              <Menu.RadioItemGroup v-model="theme">
+                <Menu.ItemGroupLabel class="language-menu-label">{{
+                  t('topBar.themes')
+                }}</Menu.ItemGroupLabel>
+                <Menu.Separator class="language-menu-separator" />
+                <Menu.RadioItem value="light" class="language-menu-item">
+                  <ToolbarIcon name="sun" />
+                  <Menu.ItemText>{{ t('topBar.lightMode') }}</Menu.ItemText>
+                  <ThemePreview theme="light" />
+                </Menu.RadioItem>
+                <Menu.RadioItem value="dark" class="language-menu-item">
+                  <ToolbarIcon name="moon" />
+                  <Menu.ItemText>{{ t('darkMode') }}</Menu.ItemText>
+                  <ThemePreview theme="dark" />
+                </Menu.RadioItem>
+                <Menu.RadioItem value="black" class="language-menu-item">
+                  <ToolbarIcon name="terminal" />
+                  <Menu.ItemText>{{ t('topBar.blackMode') }}</Menu.ItemText>
+                  <ThemePreview theme="black" />
+                </Menu.RadioItem>
+              </Menu.RadioItemGroup>
+            </Menu.Content>
+          </Menu.Positioner>
+        </Teleport>
+      </Menu.Root>
+      <span class="toolbar-divider" aria-hidden="true" />
+      <ToolbarTooltip v-slot="{ describedby }" :text="t('topBar.login')" class="login-tooltip">
+        <button type="button" class="login-button" :aria-describedby="describedby">
+          {{ t('topBar.login') }}
+          <ToolbarIcon name="login" />
+        </button>
+      </ToolbarTooltip>
     </div>
   </header>
 </template>
