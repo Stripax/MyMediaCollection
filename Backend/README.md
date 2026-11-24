@@ -353,7 +353,11 @@ work; TMDB errors preserve collection access and use cached/original names.
 Failed translation attempts have a two-minute retry delay (five minutes for
 empty translations). Changing the UI language uses cached titles and makes no
 new API request. Secondary-language failures do not block a primary-language
-import. Source details remain in their stored source language.
+import. Both languages' overviews are also persisted in the existing metadata
+rows and returned as `sourceMetadata.localizedOverviews`. The editor displays the
+overview in the UI language, falling back to the other language when unavailable,
+or the no-overview message when neither exists. Legacy responses without this
+dictionary use the original overview. The source-language row is hidden.
 
 ## TV seasons, episodes and ownership
 
@@ -404,3 +408,17 @@ preserves existing seasons. Ownership fields are rejected for non-TV categories.
 Season numbers must be unique and between 1 and 1000; only disc-format enums are
 allowed. Item updates and season replacements share a transaction, and deleting
 an item cascades to its owned season rows. Shared TMDB metadata remains intact.
+
+## Cover links to source pages
+
+Table and editor covers open the item's TMDB movie/TV page or IGDB game page in
+a new tab. TMDB URLs use the stored ID and category. IGDB URLs use the validated
+slug provided by IGDB, never a name guessed from the editable collection title.
+Migration `009-add-igdb-source-url.sql` adds `IgdbMetadata.SourceUrl`; apply it
+once after migration 008 before running the updated API. Existing game links
+are filled on collection loading when IGDB credentials are configured, without
+changing stored titles or other metadata. Successful links are persisted;
+failed attempts retry after two minutes and missing slugs after five minutes.
+The collection remains accessible if IGDB is unavailable. Manual items without
+a source link keep a plain image. Links support keyboard focus and announce
+the source and new tab in both UI languages.

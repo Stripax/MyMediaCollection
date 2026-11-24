@@ -8,6 +8,8 @@ import TmdbAttribution from './TmdbAttribution.vue'
 import { posterUrl } from '../models/tmdb'
 import { igdbCoverUrl } from '../models/igdb'
 import { displayItemName, searchableItemNames } from '../models/itemNames'
+import { itemSourceUrl } from '../models/itemSources'
+import ToolbarTooltip from './ToolbarTooltip.vue'
 import IgdbImportDialog from './IgdbImportDialog.vue'
 import IgdbAttribution from './IgdbAttribution.vue'
 import {
@@ -212,15 +214,41 @@ function finishRowLeave(element: Element) {
           <tr v-for="item in visibleItems" :key="item.id" class="collection-item-row">
             <td>
               <div class="collection-name-content">
-                <img
+                <ToolbarTooltip
                   v-if="posterUrl(item.posterPath) || igdbCoverUrl(item.coverImageId)"
-                  :src="(posterUrl(item.posterPath) || igdbCoverUrl(item.coverImageId))!"
-                  alt=""
-                  class="collection-poster"
-                  width="48"
-                  height="72"
-                  loading="lazy"
-                />
+                  v-slot="{ describedby }"
+                  :text="
+                    t(item.mediaType === 3 ? 'sourceMetadata.openIgdb' : 'sourceMetadata.openTmdb')
+                  "
+                  :disabled="!itemSourceUrl(item)"
+                  class="cover-tooltip collection-cover-tooltip"
+                >
+                  <component
+                    :is="itemSourceUrl(item) ? 'a' : 'span'"
+                    :aria-describedby="describedby"
+                    :href="itemSourceUrl(item)"
+                    :target="itemSourceUrl(item) ? '_blank' : undefined"
+                    :rel="itemSourceUrl(item) ? 'noopener noreferrer' : undefined"
+                    :aria-label="
+                      itemSourceUrl(item)
+                        ? t('sourceMetadata.openSource', {
+                            name: displayItemName(item, locale),
+                            source: item.mediaType === 3 ? 'IGDB' : 'TMDB',
+                          })
+                        : undefined
+                    "
+                    class="collection-cover-link"
+                  >
+                    <img
+                      :src="(posterUrl(item.posterPath) || igdbCoverUrl(item.coverImageId))!"
+                      alt=""
+                      class="collection-poster"
+                      width="48"
+                      height="72"
+                      loading="lazy"
+                    />
+                  </component>
+                </ToolbarTooltip>
                 <button
                   type="button"
                   class="collection-name-button"

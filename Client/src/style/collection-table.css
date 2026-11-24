@@ -180,6 +180,22 @@
   border-radius: 0.25rem;
 }
 
+.collection-cover-link {
+  display: block;
+  flex: 0 0 48px;
+  border-radius: 0.25rem;
+  line-height: 0;
+}
+
+.collection-cover-tooltip {
+  flex: 0 0 48px;
+}
+
+.collection-cover-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .collection-table .collection-info {
   white-space: pre-line;
   min-width: 12rem;

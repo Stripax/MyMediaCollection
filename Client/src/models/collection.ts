@@ -83,9 +83,11 @@ export interface TmdbSeason {
 
 export interface CollectionSourceMetadata {
   source: 'TMDB' | 'IGDB'
+  sourceUrl?: string | null
   title: string
   originalTitle: string | null
   overview: string
+  localizedOverviews?: Partial<Record<'fi' | 'en', string>> | null
   releaseDate: string | null
   language: string | null
   platforms: string[]

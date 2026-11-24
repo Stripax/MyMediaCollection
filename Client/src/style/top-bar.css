@@ -186,6 +186,28 @@
   right: 0;
   transform: none;
 }
+
+.cover-tooltip .toolbar-tooltip-content {
+  top: auto;
+  bottom: calc(100% + 0.75rem);
+  left: 0;
+  transform: none;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.cover-tooltip > a {
+  transition:
+    transform 200ms ease-in-out,
+    box-shadow 200ms ease-in-out;
+}
+
+.cover-tooltip > a:is(:hover, :focus-visible) {
+  transform: scale(1.04);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 65%, transparent),
+    0 4px 14px color-mix(in srgb, var(--accent) 25%, transparent);
+}
 .toolbar-tooltip-enter-active,
 .toolbar-tooltip-leave-active {
   transition:
@@ -233,6 +255,14 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .cover-tooltip > a {
+    transition: none;
+  }
+
+  .cover-tooltip > a:is(:hover, :focus-visible) {
+    transform: none;
+  }
+
   .toolbar-button,
   .toolbar-tooltip-enter-active,
   .toolbar-tooltip-leave-active {

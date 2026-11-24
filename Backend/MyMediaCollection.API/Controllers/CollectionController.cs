@@ -8,7 +8,7 @@ namespace MyMediaCollection.API.Controllers;
 
 [ApiController]
 [Route("api/collection")]
-public sealed class CollectionController(CollectionRepository repository, TmdbTitleService titles, ILogger<CollectionController> logger) : ControllerBase
+public sealed class CollectionController(CollectionRepository repository, TmdbTitleService titles, IgdbSourceService sources, ILogger<CollectionController> logger) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<CollectionItem>>(StatusCodes.Status200OK)]
@@ -19,6 +19,7 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
         {
             var items = await repository.GetAllAsync(cancellationToken);
             if (await titles.EnsureTitlesAsync(items, cancellationToken)) items = await repository.GetAllAsync(cancellationToken);
+            if (await sources.EnsureUrlsAsync(items, cancellationToken)) items = await repository.GetAllAsync(cancellationToken);
             return Ok(items);
         }
         catch (SqliteException exception)

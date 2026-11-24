@@ -99,14 +99,14 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
         {
             igdbMetadataId = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
                 """
-                INSERT INTO "IgdbMetadata" ("IgdbId", "Title", "Overview", "ReleaseDate", "CoverImageId", "PlatformsJson", "FetchedAt")
-                VALUES (@IgdbId, @Title, @Overview, @ReleaseDate, @CoverImageId, @PlatformsJson, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                INSERT INTO "IgdbMetadata" ("IgdbId", "Title", "Overview", "ReleaseDate", "CoverImageId", "PlatformsJson", "FetchedAt", "SourceUrl")
+                VALUES (@IgdbId, @Title, @Overview, @ReleaseDate, @CoverImageId, @PlatformsJson, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), @SourceUrl)
                 ON CONFLICT ("IgdbId") DO UPDATE SET
                     "Title" = excluded."Title", "Overview" = excluded."Overview", "ReleaseDate" = excluded."ReleaseDate",
-                    "CoverImageId" = excluded."CoverImageId", "PlatformsJson" = excluded."PlatformsJson", "FetchedAt" = excluded."FetchedAt"
+                    "CoverImageId" = excluded."CoverImageId", "PlatformsJson" = excluded."PlatformsJson", "FetchedAt" = excluded."FetchedAt", "SourceUrl" = COALESCE(excluded."SourceUrl", "IgdbMetadata"."SourceUrl")
                 RETURNING "Id";
                 """, new { igdbMetadata.IgdbId, igdbMetadata.Title, igdbMetadata.Overview, igdbMetadata.ReleaseDate,
-                    igdbMetadata.CoverImageId, PlatformsJson = JsonSerializer.Serialize(igdbMetadata.Platforms) },
+                    igdbMetadata.CoverImageId, igdbMetadata.SourceUrl, PlatformsJson = JsonSerializer.Serialize(igdbMetadata.Platforms) },
                 transaction, cancellationToken: cancellationToken));
         }
         if (metadata is not null)
@@ -144,6 +144,15 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
         await SaveTmdbMetadataAsync(connection, metadata, cancellationToken);
     }
 
+    public async Task CacheIgdbSourceUrlAsync(long igdbId, string url, CancellationToken cancellationToken)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE IgdbMetadata SET SourceUrl = @Url WHERE IgdbId = @IgdbId;",
+            new { Url = url, IgdbId = igdbId }, cancellationToken: cancellationToken));
+    }
+
     private static Task<long> SaveTmdbMetadataAsync(SqliteConnection connection, TmdbMetadata metadata, CancellationToken cancellationToken, SqliteTransaction? transaction = null)
         => connection.ExecuteScalarAsync<long>(new CommandDefinition(
 """
@@ -176,20 +185,23 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
         {
             var rows = await connection.QueryAsync<SourceMetadataRow>(new CommandDefinition(
                 """
-                SELECT "Id", 'IGDB' AS "Source", "Title", "Overview", "ReleaseDate", "PlatformsJson", "FetchedAt"
+                SELECT "Id", 'IGDB' AS "Source", "Title", "Overview", "ReleaseDate", "PlatformsJson", "FetchedAt", "SourceUrl"
                 FROM "IgdbMetadata" WHERE "Id" IN @Ids;
                 """, new { Ids = igdbIds }, transaction, cancellationToken: cancellationToken));
             igdb = rows.ToDictionary(row => row.Id, ToSourceMetadata);
         }
         var externalIds = items.Where(item => item.TmdbId.HasValue).Select(item => item.TmdbId!.Value).Distinct().ToArray();
         var localized = new Dictionary<(long, MediaType), IReadOnlyDictionary<string, string>>();
+        var overviews = new Dictionary<(long, MediaType), IReadOnlyDictionary<string, string>>();
         if (externalIds.Length > 0)
         {
             var rows = await connection.QueryAsync<TmdbMetadata>(new CommandDefinition(
-                "SELECT TmdbId, MediaType, Language, Title FROM TmdbMetadata WHERE TmdbId IN @Ids AND Language IN ('fi-FI', 'en-US');",
+                "SELECT TmdbId, MediaType, Language, Title, Overview FROM TmdbMetadata WHERE TmdbId IN @Ids AND Language IN ('fi-FI', 'en-US');",
                 new { Ids = externalIds }, transaction, cancellationToken: cancellationToken));
             localized = rows.Where(row => !string.IsNullOrWhiteSpace(row.Title)).GroupBy(row => (row.TmdbId, row.MediaType))
                 .ToDictionary(group => group.Key, group => (IReadOnlyDictionary<string, string>)group.ToDictionary(row => row.Language == "fi-FI" ? "fi" : "en", row => row.Title));
+            overviews = rows.GroupBy(row => (row.TmdbId, row.MediaType))
+                .ToDictionary(group => group.Key, group => (IReadOnlyDictionary<string, string>)group.ToDictionary(row => row.Language == "fi-FI" ? "fi" : "en", row => row.Overview));
         }
         var ownership = new Dictionary<long, IReadOnlyList<OwnedSeason>>();
         if (items.Count > 0) {
@@ -204,7 +216,9 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
             OwnedSeasons = ownership.GetValueOrDefault(item.Id) ?? [],
             LocalizedTitles = item.TmdbId is long externalId ? localized.GetValueOrDefault((externalId, item.MediaType)) : null,
             SourceMetadata = item.MediaType is MediaType.Movie or MediaType.TvSeries && item.TmdbMetadataId is long tmdbId
-                ? tmdb.GetValueOrDefault(tmdbId)
+                ? tmdb.GetValueOrDefault(tmdbId) is { } metadata
+                    ? metadata with { LocalizedOverviews = item.TmdbId is long id ? overviews.GetValueOrDefault((id, item.MediaType)) : null }
+                    : null
                 : item.MediaType == MediaType.VideoGame && item.IgdbMetadataId is long igdbId ? igdb.GetValueOrDefault(igdbId) : null
         }).ToList();
     }
@@ -253,7 +267,7 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
         }
         return new()
         {
-            Source = row.Source, Title = row.Title, OriginalTitle = row.OriginalTitle,
+            Source = row.Source, SourceUrl = row.SourceUrl, Title = row.Title, OriginalTitle = row.OriginalTitle,
             Overview = row.Overview, ReleaseDate = row.ReleaseDate, Language = row.Language,
             Platforms = platforms, FetchedAt = row.FetchedAt, NumberOfSeasons = row.NumberOfSeasons, NumberOfEpisodes = row.NumberOfEpisodes, Seasons = ReadSeasons(row.SeasonsJson)
         };
@@ -263,6 +277,7 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
     {
         public long Id { get; init; }
         public string Source { get; init; } = "";
+        public string? SourceUrl { get; init; }
         public string Title { get; init; } = "";
         public string? OriginalTitle { get; init; }
         public string Overview { get; init; } = "";

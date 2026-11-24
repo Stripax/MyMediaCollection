@@ -9,6 +9,7 @@ builder.Services.AddControllers();
 builder.Services.AddScoped<CollectionRepository>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<TmdbTitleService>();
+builder.Services.AddScoped<IgdbSourceService>();
 builder.Services.AddSingleton<IgdbAccess>();
 builder.Services.AddHttpClient("IgdbOAuth", client => client.Timeout = TimeSpan.FromSeconds(10)).RemoveAllLoggers();
 builder.Services.AddHttpClient<IgdbClient>(client =>

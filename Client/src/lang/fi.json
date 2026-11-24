@@ -170,6 +170,9 @@
     "attribution": "Pelitiedot ja kansikuvat: IGDB.com"
   },
   "sourceMetadata": {
+    "openTmdb": "Avaa TMDB:ssä",
+    "openIgdb": "Avaa IGDB:ssä",
+    "openSource": "Avaa {name} palvelussa {source} (uusi välilehti)",
     "title": "{source}-tiedot",
     "name": "Nimi palvelussa",
     "originalTitle": "Alkuperäinen nimi",

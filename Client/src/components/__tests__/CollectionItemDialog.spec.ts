@@ -150,7 +150,7 @@ describe('Collection item dialog', () => {
       else {
         expect(details.text()).toContain('Original title')
         expect(details.text()).toContain(labels.sourceMetadata.firstAirDate)
-        expect(details.text()).toContain(labels.sourceMetadata.finnish)
+        expect(details.text()).not.toContain(labels.sourceMetadata.language)
       }
       expect((dialog.get('textarea[name="Info"]').element as HTMLTextAreaElement).value).toBe(
         'Personal notes',

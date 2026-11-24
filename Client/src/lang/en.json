@@ -170,6 +170,9 @@
     "attribution": "Game data and cover images: IGDB.com"
   },
   "sourceMetadata": {
+    "openTmdb": "Open on TMDB",
+    "openIgdb": "Open on IGDB",
+    "openSource": "Open {name} on {source} (new tab)",
     "title": "{source} details",
     "name": "Title in source",
     "originalTitle": "Original title",

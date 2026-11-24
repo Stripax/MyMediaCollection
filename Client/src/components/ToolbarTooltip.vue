@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, useId } from 'vue'
 
-defineProps<{ text: string }>()
+defineProps<{ text: string; disabled?: boolean }>()
 const id = useId()
 const visible = ref(false)
 </script>
@@ -9,7 +9,7 @@ const visible = ref(false)
 <template>
   <span
     class="toolbar-tooltip"
-    @mouseenter="visible = true"
+    @mouseenter="visible = !disabled"
     @mouseleave="visible = false"
     @keydown.esc="visible = false"
     @click="visible = false"

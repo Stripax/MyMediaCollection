@@ -45,6 +45,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     database.exec('DELETE FROM Collection; DELETE FROM TmdbMetadata;');
   })
   database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/008-add-tv-season-ownership.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/009-add-igdb-source-url.sql', import.meta.url), 'utf8'))
   const igdbRequests = []
   const tokenRequests = []
   let rejectNextToken = false
@@ -82,7 +83,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     if (address.pathname.endsWith('/580') && address.searchParams.get('language') === 'en-US') { response.writeHead(503); response.end('{}'); return; }
     const data = { id: localized ? Number(address.pathname.split('/').at(-1)) : 603, title: 'The Matrix', original_title: 'The Matrix', name: 'TV example', original_name: 'Original TV example', overview: 'TMDB overview', release_date: '1999-03-30', first_air_date: '2001-04-05', poster_path: '/matrix.jpg' }
     if (tv) Object.assign(data, {number_of_seasons:3,number_of_episodes:24,seasons:[{season_number:0,name:'Specials',episode_count:2},{season_number:1,name:'Season 1',episode_count:8},{season_number:2,name:'Season 2',episode_count:8},{season_number:3,name:'Season 3',episode_count:8}]});
-    if (localized) { data.title = address.searchParams.get('language') === 'fi-FI' ? 'Tappajahai' : 'Jaws'; data.original_title = 'Jaws'; data.name = address.searchParams.get('language') === 'fi-FI' ? 'Fi-sarja' : 'English series'; data.original_name = 'Original series'; }
+    if (localized) { data.title = address.searchParams.get('language') === 'fi-FI' ? 'Tappajahai' : 'Jaws'; data.original_title = 'Jaws'; data.name = address.searchParams.get('language') === 'fi-FI' ? 'Fi-sarja' : 'English series'; data.original_name = 'Original series'; data.overview = address.searchParams.get('language') === 'fi-FI' ? 'Suomenkielinen yhteenveto' : 'English overview'; }
     response.end(JSON.stringify(address.pathname.includes('/search/') ? { page: 1, total_pages: 2, results: [{ ...data, ...(tv ? {} : { title: 'Matrix – hakutulos' }) }] } : data))
   })
   tmdbServer.listen(0, '127.0.0.1')
@@ -564,10 +565,16 @@ test('collection API stores and validates items in an isolated SQLite database',
       const item = await response.json()
       assert.equal(item.isNameCustom,false)
       assert.deepEqual(item.localizedTitles,mediaType===1?{fi:'Tappajahai',en:'Jaws'}:{fi:'Fi-sarja',en:'English series'})
+      assert.deepEqual(item.sourceMetadata.localizedOverviews,{fi:'Suomenkielinen yhteenveto',en:'English overview'})
+      const storedOverviews=database.prepare('SELECT Language,Overview FROM TmdbMetadata WHERE TmdbId=578 AND MediaType=? ORDER BY Language').all(mediaType)
+      assert.deepEqual(storedOverviews.map(row=>row.Overview),['English overview','Suomenkielinen yhteenveto'])
       const unchanged = await fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:mediaType===1?'Jaws':'English series',mediaType,mediaFormat:3,info:'Own notes',nameWasEdited:false})})
       const saved = await unchanged.json()
       assert.equal(saved.name,item.name)
       assert.equal(saved.isNameCustom,false)
+      assert.deepEqual(saved.sourceMetadata.localizedOverviews,item.sourceMetadata.localizedOverviews)
+      const listed=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+      assert.deepEqual(listed.sourceMetadata.localizedOverviews,item.sourceMetadata.localizedOverviews)
       const renamed = await fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'My chosen title',mediaType,mediaFormat:3,nameWasEdited:true})})
       const custom = await renamed.json()
       assert.equal(custom.name,'My chosen title')
@@ -584,6 +591,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     const list = await (await fetch(url)).json()
     const item = list.find(entry=>entry.id===id)
     assert.deepEqual(item.localizedTitles,{fi:'Tappajahai',en:'Jaws'})
+    assert.deepEqual(item.sourceMetadata.localizedOverviews,{fi:'',en:'English overview'})
     assert.equal(database.prepare('SELECT Name FROM Collection WHERE Id=?').get(id).Name,'Tappajahai')
     const requestsBefore = tmdbRequests.length
     await fetch(url)
@@ -594,6 +602,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(response.status,201)
     const item = await response.json()
     assert.deepEqual(item.localizedTitles,{fi:'Tappajahai'})
+    assert.deepEqual(item.sourceMetadata.localizedOverviews,{fi:'Suomenkielinen yhteenveto'})
     assert.equal(item.sourceMetadata.originalTitle,'Jaws')
     assert.equal((await fetch(url)).status,200)
     const requestsBefore = tmdbRequests.length
@@ -707,6 +716,8 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(metadata.CoverImageId, 'igdb_cover')
     assert.equal(item.sourceMetadata.title, metadata.Title)
     assert.equal(item.sourceMetadata.source, 'IGDB')
+    assert.equal(item.sourceMetadata.sourceUrl, 'https://www.igdb.com/games/game-example')
+    assert.equal(database.prepare('SELECT SourceUrl FROM IgdbMetadata WHERE IgdbId=?').get(item.igdbId).SourceUrl, item.sourceMetadata.sourceUrl)
     assert.equal(item.sourceMetadata.overview, 'Game overview')
     assert.equal(item.sourceMetadata.releaseDate, '2001-09-09')
     assert.deepEqual(item.sourceMetadata.platforms, ['PC (Microsoft Windows)', 'PlayStation 5'])
@@ -719,11 +730,30 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(updated.coverImageId, 'igdb_cover')
     assert.equal(updated.sourceMetadata.title, 'IGDB canonical title')
     assert.equal(updated.sourceMetadata.overview, 'Game overview')
+    assert.equal(updated.sourceMetadata.sourceUrl, item.sourceMetadata.sourceUrl)
     assert.equal((await (await fetch(url)).json()).find(entry => entry.id === item.id).coverImageId, 'igdb_cover')
     assert.equal((await fetch(`${url}/${item.id}`, {method:'DELETE'})).status, 204)
     assert.ok(database.prepare('SELECT Id FROM IgdbMetadata WHERE Id = ?').get(pc.igdbMetadataId))
     const changeCategory = await fetch(`${url}/${pc.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:'Changed', mediaType:1, mediaFormat:2})})
     assert.equal((await changeCategory.json()).igdbMetadataId, null)
+  })
+  await t.test('fills missing legacy IGDB links once without changing stored game details', async () => {
+    const metadataId=Number(database.prepare("INSERT INTO IgdbMetadata (IgdbId,Title,Overview,PlatformsJson,FetchedAt) VALUES (1943,'Stored title','Stored overview','[]','2026-01-01T00:00:00Z')").run().lastInsertRowid)
+    const itemId=Number(database.prepare('INSERT INTO Collection (Name,MediaType,Platform,IgdbMetadataId) VALUES (?,3,9,?)').run('Own name',metadataId).lastInsertRowid)
+    const item=(await (await fetch(url)).json()).find(entry=>entry.id===itemId)
+    assert.equal(item.sourceMetadata.sourceUrl,'https://www.igdb.com/games/game-example')
+    assert.equal(item.sourceMetadata.title,'Stored title')
+    assert.equal(item.sourceMetadata.overview,'Stored overview')
+    assert.equal(item.name,'Own name')
+    const requestsBefore=igdbRequests.length
+    await fetch(url)
+    assert.equal(igdbRequests.length,requestsBefore)
+    database.prepare('UPDATE IgdbMetadata SET IgdbId=404,SourceUrl=NULL WHERE Id=?').run(metadataId)
+    assert.equal((await fetch(url)).status,200)
+    const failedRequests=igdbRequests.length
+    assert.equal((await fetch(url)).status,200)
+    assert.equal(igdbRequests.length,failedRequests)
+    database.prepare('DELETE FROM Collection WHERE Id=?').run(itemId)
   })
   await t.test('IGDB failures, missing games and invalid copy details never save partial data', async () => {
     const endpoint = `http://127.0.0.1:${port}/api/igdb`

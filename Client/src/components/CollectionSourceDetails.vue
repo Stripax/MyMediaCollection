@@ -7,10 +7,15 @@ const props = defineProps<{ metadata: CollectionSourceMetadata; mediaType: numbe
 const { t, locale } = useI18n({ useScope: 'global' })
 const headingId = useId()
 const releaseYear = computed(() => props.metadata.releaseDate?.match(/^\d{4}/)?.[0])
-const dataLanguage = computed(() => {
-  if (props.metadata.language?.startsWith('fi')) return t('sourceMetadata.finnish')
-  if (props.metadata.language?.startsWith('en')) return t('sourceMetadata.english')
-  return props.metadata.language
+const overview = computed(() => {
+  const metadata = props.metadata
+  if (metadata.source !== 'TMDB' || !metadata.localizedOverviews) return metadata.overview
+  const language = locale.value === 'fi' ? 'fi' : 'en'
+  return (
+    metadata.localizedOverviews[language]?.trim() ||
+    metadata.localizedOverviews[language === 'fi' ? 'en' : 'fi']?.trim() ||
+    ''
+  )
 })
 
 function formatDate(value: string, withTime = false) {
@@ -50,10 +55,6 @@ function formatDate(value: string, withTime = false) {
           <time :datetime="metadata.releaseDate">{{ formatDate(metadata.releaseDate) }}</time>
         </dd>
       </div>
-      <div v-if="dataLanguage" class="source-details-row">
-        <dt>{{ t('sourceMetadata.language') }}</dt>
-        <dd>{{ dataLanguage }}</dd>
-      </div>
       <div v-if="metadata.platforms.length" class="source-details-row">
         <dt>{{ t('sourceMetadata.platforms') }}</dt>
         <dd>{{ metadata.platforms.join(', ') }}</dd>
@@ -61,7 +62,7 @@ function formatDate(value: string, withTime = false) {
       <div class="source-details-row">
         <dt>{{ t('sourceMetadata.overview') }}</dt>
         <dd class="source-details-overview">
-          {{ metadata.overview || t('sourceMetadata.noOverview') }}
+          {{ overview || t('sourceMetadata.noOverview') }}
         </dd>
       </div>
       <template v-if="mediaType === 2">

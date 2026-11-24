@@ -8,6 +8,7 @@ import CollectionSourceDetails from './CollectionSourceDetails.vue'
 import TvSeasonOwnership from './TvSeasonOwnership.vue'
 import { snackbarElements, useSnackbar } from '../composables/useSnackbar'
 import { posterUrl } from '../models/tmdb'
+import { itemSourceUrl } from '../models/itemSources'
 import { igdbCoverUrl } from '../models/igdb'
 import { displayItemName } from '../models/itemNames'
 import {
@@ -260,15 +261,45 @@ function reportError(message: string) {
                   class="item-dialog-source"
                   :class="{ 'item-dialog-source-with-poster': editPosterUrl && !posterFailed }"
                 >
-                  <img
+                  <ToolbarTooltip
                     v-if="editPosterUrl && !posterFailed"
-                    class="item-dialog-poster"
-                    :src="editPosterUrl"
-                    :alt="item ? displayItemName(item, locale) : ''"
-                    width="120"
-                    height="180"
-                    @error="posterFailed = true"
-                  />
+                    v-slot="{ describedby }"
+                    :text="
+                      t(
+                        item?.mediaType === 3
+                          ? 'sourceMetadata.openIgdb'
+                          : 'sourceMetadata.openTmdb',
+                      )
+                    "
+                    :disabled="!item || !itemSourceUrl(item)"
+                    class="cover-tooltip item-dialog-cover-tooltip"
+                  >
+                    <component
+                      :is="item && itemSourceUrl(item) ? 'a' : 'span'"
+                      :aria-describedby="describedby"
+                      :href="item && itemSourceUrl(item)"
+                      :target="item && itemSourceUrl(item) ? '_blank' : undefined"
+                      :rel="item && itemSourceUrl(item) ? 'noopener noreferrer' : undefined"
+                      :aria-label="
+                        item && itemSourceUrl(item)
+                          ? t('sourceMetadata.openSource', {
+                              name: displayItemName(item, locale),
+                              source: item.mediaType === 3 ? 'IGDB' : 'TMDB',
+                            })
+                          : undefined
+                      "
+                      class="item-dialog-cover-link"
+                    >
+                      <img
+                        class="item-dialog-poster"
+                        :src="editPosterUrl"
+                        :alt="item ? displayItemName(item, locale) : ''"
+                        width="120"
+                        height="180"
+                        @error="posterFailed = true"
+                      />
+                    </component>
+                  </ToolbarTooltip>
                   <CollectionSourceDetails
                     v-if="item?.sourceMetadata"
                     :metadata="item.sourceMetadata"
