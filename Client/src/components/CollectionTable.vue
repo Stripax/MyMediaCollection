@@ -6,6 +6,10 @@ import DeleteCollectionItemDialog from './DeleteCollectionItemDialog.vue'
 import TmdbImportDialog from './TmdbImportDialog.vue'
 import TmdbAttribution from './TmdbAttribution.vue'
 import { posterUrl } from '../models/tmdb'
+import { igdbCoverUrl } from '../models/igdb'
+import { displayItemName, searchableItemNames } from '../models/itemNames'
+import IgdbImportDialog from './IgdbImportDialog.vue'
+import IgdbAttribution from './IgdbAttribution.vue'
 import {
   mediaCategories,
   mediaFormats,
@@ -41,13 +45,15 @@ const normalizedQuery = computed(() => searchQuery.value.trim().normalize('NFC')
 function itemChanged() {
   emit('changed')
 }
-const { t } = useI18n({ useScope: 'global' })
+const { t, locale } = useI18n({ useScope: 'global' })
 const visibleItems = computed(() => {
   const mediaType = mediaCategories.find((category) => category.id === props.category)?.value
   return props.items.filter(
     (item) =>
       (props.category === 'all' || item.mediaType === mediaType) &&
-      item.name.normalize('NFC').toLowerCase().includes(normalizedQuery.value),
+      searchableItemNames(item).some((name) =>
+        name.normalize('NFC').toLowerCase().includes(normalizedQuery.value),
+      ),
   )
 })
 
@@ -56,17 +62,32 @@ function optionLabel(option: { value: number; label: string } | undefined) {
   return option.value === otherOption ? t('common.other') : option.label
 }
 
+function categoryLabel(mediaType: number) {
+  const category = mediaCategories.find((category) => category.value === mediaType)
+  return t(category?.label ?? 'collection.unknown')
+}
+
 function formatLabel(item: CollectionItem) {
+  if (item.mediaType === 2 && (item.isCompleteBox || item.ownedSeasons?.length)) {
+    const formats = item.ownedSeasons?.length
+      ? [...new Set(item.ownedSeasons.map((season) => season.mediaFormat))]
+      : [item.mediaFormat]
+    const label = formats
+      .map((value) => optionLabel(mediaFormats.find((format) => format.value === value)))
+      .join(' / ')
+    return item.isCompleteBox ? `${t('tvOwnership.completeBoxShort')} · ${label}` : label
+  }
   if (item.mediaType === 4) {
     const format = boardGameFormats.find((format) => format.value === item.mediaFormat)
     return format ? t(format.label) : '—'
   }
   if (item.mediaType === 3) {
-    if (item.platform === pcPlatform) {
-      const store = gameStores.find((store) => store.value === item.store)
-      return store ? `PC · ${optionLabel(store)}` : 'PC'
-    }
-    return optionLabel(gamePlatforms.find((platform) => platform.value === item.platform))
+    const platform =
+      item.platform === pcPlatform
+        ? 'PC'
+        : optionLabel(gamePlatforms.find((platform) => platform.value === item.platform))
+    const store = gameStores.find((store) => store.value === item.store)
+    return store ? `${platform} · ${optionLabel(store)}` : platform
   }
   return optionLabel(mediaFormats.find((format) => format.value === item.mediaFormat))
 }
@@ -125,6 +146,7 @@ function finishRowLeave(element: Element) {
           <input
             v-model="searchQuery"
             type="search"
+            autocomplete="off"
             :placeholder="t('collection.searchPlaceholder')"
           />
         </label>
@@ -136,6 +158,10 @@ function finishRowLeave(element: Element) {
       <TmdbImportDialog
         v-if="category === 'all' || category === 'movies' || category === 'tvSeries'"
         :category="category"
+        @saved="itemChanged"
+      />
+      <IgdbImportDialog
+        v-if="category === 'all' || category === 'videoGames'"
         @saved="itemChanged"
       />
     </div>
@@ -159,6 +185,7 @@ function finishRowLeave(element: Element) {
         <thead>
           <tr>
             <th scope="col">{{ t('itemForm.name') }}</th>
+            <th v-if="category === 'all'" scope="col">{{ t('collection.category') }}</th>
             <th scope="col">
               {{
                 t(
@@ -170,6 +197,7 @@ function finishRowLeave(element: Element) {
                 )
               }}
             </th>
+            <th v-if="category === 'videoGames'" scope="col">{{ t('collection.copyType') }}</th>
             <th scope="col">{{ t('itemForm.info') }}</th>
             <th scope="col">{{ t('collection.actions') }}</th>
           </tr>
@@ -183,26 +211,43 @@ function finishRowLeave(element: Element) {
         >
           <tr v-for="item in visibleItems" :key="item.id" class="collection-item-row">
             <td>
-              <img
-                v-if="posterUrl(item.posterPath)"
-                :src="posterUrl(item.posterPath)!"
-                alt=""
-                class="collection-poster"
-                width="48"
-                height="72"
-                loading="lazy"
-              />
-              <button
-                type="button"
-                class="collection-name-button"
-                :aria-label="t('collection.editItem', { name: item.name })"
-                aria-haspopup="dialog"
-                @click="editItem(item.id, $event)"
-              >
-                {{ item.name }}
-              </button>
+              <div class="collection-name-content">
+                <img
+                  v-if="posterUrl(item.posterPath) || igdbCoverUrl(item.coverImageId)"
+                  :src="(posterUrl(item.posterPath) || igdbCoverUrl(item.coverImageId))!"
+                  alt=""
+                  class="collection-poster"
+                  width="48"
+                  height="72"
+                  loading="lazy"
+                />
+                <button
+                  type="button"
+                  class="collection-name-button"
+                  :title="displayItemName(item, locale)"
+                  :aria-label="t('collection.editItem', { name: displayItemName(item, locale) })"
+                  aria-haspopup="dialog"
+                  @click="editItem(item.id, $event)"
+                >
+                  {{ displayItemName(item, locale) }}
+                </button>
+              </div>
             </td>
-            <td>{{ formatLabel(item) }}</td>
+            <td v-if="category === 'all'" class="collection-category">
+              {{ categoryLabel(item.mediaType) }}
+            </td>
+            <td class="collection-format">{{ formatLabel(item) }}</td>
+            <td v-if="category === 'videoGames'" class="collection-copy-type">
+              {{
+                t(
+                  item.isPhysical === true
+                    ? 'collection.physicalCopy'
+                    : item.isPhysical === false
+                      ? 'collection.digitalCopy'
+                      : 'collection.unknownCopy',
+                )
+              }}
+            </td>
             <td class="collection-info">{{ item.info || '—' }}</td>
             <td>
               <div class="collection-row-actions">
@@ -216,7 +261,10 @@ function finishRowLeave(element: Element) {
             </td>
           </tr>
           <tr v-if="!visibleItems.length && !loading && !error" key="empty">
-            <td colspan="4" class="collection-empty">
+            <td
+              :colspan="category === 'all' || category === 'videoGames' ? 5 : 4"
+              class="collection-empty"
+            >
               {{
                 t(
                   normalizedQuery
@@ -232,6 +280,7 @@ function finishRowLeave(element: Element) {
       </table>
     </div>
     <TmdbAttribution v-if="visibleItems.some((item) => item.tmdbId)" />
+    <IgdbAttribution v-if="visibleItems.some((item) => item.igdbId)" />
   </section>
 </template>
 

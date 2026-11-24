@@ -12,12 +12,16 @@ public sealed record TmdbMetadata
     public string Overview { get; init; } = string.Empty;
     public string? ReleaseDate { get; init; }
     public string? PosterPath { get; init; }
+    public int? NumberOfSeasons { get; init; }
+    public int? NumberOfEpisodes { get; init; }
+    public IReadOnlyList<TmdbSeason> Seasons { get; init; } = [];
 }
 
 public sealed record TmdbSearchPage(int Page, int TotalPages, IReadOnlyList<TmdbMetadata> Results);
 
 public sealed class TmdbImportRequest : IValidatableObject
 {
+    public bool? UseLocalizedName { get; init; }
     [Range(1, int.MaxValue)]
     public int TmdbId { get; init; }
     [Required, RegularExpression("^(fi-FI|en-US)$")]

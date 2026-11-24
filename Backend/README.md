@@ -52,9 +52,10 @@ format. Set `mediaFormat` to null or omit it for a video game:
 `GamePlatform` values and console names are defined in
 `MyMediaCollection.API/Models/GamePlatform.cs`; the corresponding client options
 are in `Client/src/models/collection.ts`. Platforms 1–25 cover Xbox, PlayStation,
-Nintendo and Sega consoles; PC is platform 26. PC games require `store`, a
+Nintendo and Sega consoles; PC is platform 26. Digital PC games require `store`, a
 numeric `GameStore` enum value: Steam = 1, GOG = 2, Epic Games Store = 3,
-Microsoft Store = 4, EA app = 5, Ubisoft Store = 6, Battle.net = 7, itch.io = 8.
+Microsoft Store = 4, EA app = 5, Ubisoft Store = 6, Battle.net = 7, itch.io = 8,
+Xbox Store = 9 and PlayStation Store = 10. Other remains 99.
 
 ```json
 {
@@ -65,10 +66,12 @@ Microsoft Store = 4, EA app = 5, Ubisoft Store = 6, Battle.net = 7, itch.io = 8.
 }
 ```
 
-The store is only shown in the client when PC is selected. Console games and
-other categories must omit `store` or set it to null. Changing a PC game to a
-console or another category clears the store when saving. The table displays
-the PC store alongside the platform, for example `PC · Steam`.
+The store is shown for every video game. It is optional for console games and
+physical PC copies; digital PC games still require it. Other categories must
+omit `store` or set it to null. Switching between game platforms preserves the
+selected store; changing to another category omits it when saving. The table
+displays a selected store alongside any platform, for example `PC · Steam` or
+`PlayStation 5 · PlayStation Store`.
 The API requires a defined platform for video games and rejects a disc format
 on those items. Movies and TV series require a disc format and cannot set a
 platform. Board and card games (`mediaType: 4`) require `mediaFormat` 4 (board
@@ -207,3 +210,197 @@ in normal use so requests go to `https://api.themoviedb.org/3/`.
 References: [TMDB authentication](https://developer.themoviedb.org/docs/authentication-application),
 [images](https://developer.themoviedb.org/docs/image-basics), and
 [attribution](https://developer.themoviedb.org/docs/faq).
+
+## IGDB video game search and import
+
+The **Add with IGDB search** button is available on All and Video games. It uses
+the same search-dialog component as TMDB while keeping the workflows separate:
+IGDB imports require the user's platform; digital PC copies also require a game store.
+Manual addition remains available. IGDB's platform names are shown as reference;
+they are not confused with the application's own platform enum values.
+Searches retrieve the game title, overview, first release date, platforms and
+cover. IGDB text is shown as returned (usually English), without claiming a
+Finnish translation. The interface itself is localized.
+
+IGDB authentication requires a Twitch application's **Client ID and Client
+Secret**, not a TMDB-style API key. Set them locally on the backend:
+
+```powershell
+dotnet user-secrets set "Igdb:ClientId" "YOUR_TWITCH_CLIENT_ID" --project Backend/MyMediaCollection.API
+dotnet user-secrets set "Igdb:ClientSecret" "YOUR_TWITCH_CLIENT_SECRET" --project Backend/MyMediaCollection.API
+```
+
+Start/restart the API with the Development launch profile after setting secrets.
+For deployed environments use `Igdb__ClientId` and `Igdb__ClientSecret` in the
+host's secret configuration. Neither value belongs in frontend files or Git.
+The backend obtains an app token from Twitch, caches it until shortly before
+expiry, and retries a rejected token once with a fresh token. IGDB requests are
+serialized with at least 300 ms between starts to stay below the documented
+four-requests-per-second limit. Credentials and tokens are never returned to
+the browser; logging is disabled for the IGDB and OAuth HTTP clients.
+
+Migration `MyMediaCollection.API/Data/Migrations/005-add-igdb-metadata.sql`
+creates `IgdbMetadata` and the nullable `Collection.IgdbMetadataId` foreign key.
+It has been applied to the local workspace database after a backup. Other
+databases must run it once after migration 004 before starting the new API.
+Existing collection items and TMDB links are preserved.
+
+IGDB metadata is unique by IGDB game ID and stores the title, overview, release
+date, cover image ID, platform names and UTC fetch time. It is stored in the
+same transaction as the new collection item. Multiple console/PC copies can
+share game metadata while retaining their own name, platform, store and notes.
+Ordinary edits preserve the link; changing category through the API clears it.
+Deleting a copy does not delete shared metadata. Covers are loaded over HTTPS
+from IGDB's image CDN and are shown in the table and editor.
+
+`GET /api/igdb/search?query=Halo&page=1` returns `page`, `hasNextPage`, and up to
+20 normalized results. `POST /api/igdb/import` accepts:
+
+```json
+{
+  "igdbId": 1942,
+  "item": {
+    "name": "My game",
+    "mediaType": 3,
+    "mediaFormat": null,
+    "platform": 9,
+    "info": "My copy's notes"
+  }
+}
+```
+
+For digital PC use `platform: 26` and supply `store`. The server re-fetches canonical
+IGDB details before saving and does not trust metadata sent by the browser.
+Collection responses include nullable `igdbMetadataId`, `igdbId` and
+`coverImageId`. Controlled error codes distinguish missing configuration (503),
+credentials/network errors (502), rate limiting (429), and missing games (404).
+Search input is length-limited and escaped as an APICalypse string literal.
+
+Tests use local IGDB/OAuth mocks. The server-only `Igdb:BaseUrl` and
+`Igdb:TokenUrl` settings support that isolation; leave them unset in normal use.
+Live IGDB requests require real credentials and are not part of automated tests.
+See [IGDB documentation](https://api-docs.igdb.com/) and
+[Twitch client credentials](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#client-credentials-grant-flow).
+
+## Stored source details in the editor
+
+Collection GET, POST/import and PUT responses include nullable `sourceMetadata`.
+For linked items it contains the source (`TMDB` or `IGDB`), source title,
+original title when available, overview, release/first-air date, data language,
+source platform names and UTC retrieval timestamp. Manual items return null.
+These values are read from the existing metadata tables; no additional schema
+migration or external API call is needed to open the editor. Metadata is loaded
+in batches for the linked IDs, rather than making a request for every row.
+
+The editor shows this information read-only, separately from the user's name,
+format/platform/store and personal notes. Source text is displayed as stored,
+while labels and date formatting follow the UI language. Unknown dates and
+missing overviews have localized placeholders. Saving personal changes does not
+overwrite the cached source metadata.
+
+## Physical video game copies
+
+Migration `MyMediaCollection.API/Data/Migrations/006-add-physical-copy.sql` adds
+nullable `IsPhysical INTEGER`, constrained to 0/1 or NULL. It has been applied to
+the local database after a backup, preserving existing rows and leaving their
+historical copy type unknown (NULL). Run it once after migration 005 in other
+databases before starting this version of the API.
+
+Video game addition, IGDB import and editing have a **Physical copy** checkbox.
+`isPhysical: true` denotes a physical copy and false a digital copy. New game
+requests without the field default to false; historical NULL values appear
+unchecked in the editor and are recorded as the selected checkbox value when
+saved. Non-game items keep NULL and cannot set this field through the API.
+The flag is stored with the user's collection copy, not the shared IGDB record.
+
+All video games can select any defined store or Other. The store may be cleared
+for a console or physical PC game. Digital PC games require one. The new console
+store enum values are 9 (Xbox Store) and 10 (PlayStation Store); existing enum
+values are unchanged. Regular POST/PUT and IGDB import all use the same rules.
+
+## Localized TMDB item names
+
+Migration `MyMediaCollection.API/Data/Migrations/007-add-custom-name.sql` adds
+`Collection.IsNameCustom`. The local database has been migrated after a backup;
+other databases must run it once after migration 006. Existing manual and
+renamed items default to custom names. A linked movie/TV item whose stored name
+exactly matches its cached TMDB title is classified as automatic. Existing names
+and other collection data are not rewritten by the migration.
+
+TMDB imports fetch both `fi-FI` and `en-US` details and reuse the existing
+`TmdbMetadata` table's unique TMDB ID/media type/language key. No separate
+translation table is needed. `useLocalizedName` on the TMDB import request states
+whether the user kept the suggested name. When omitted, the backend compares
+the supplied name with the primary source title. A custom name is kept in
+`Collection.Name`; language selection never overwrites this stored field.
+
+Collection responses include `isNameCustom` and nullable `localizedTitles`,
+for example `{ "fi": "Tappajahai", "en": "Jaws" }`. Automatic TMDB movie/TV
+names follow the UI language, falling back to the original title, then another
+available translation, then the stored name. Manual items, renamed copies and
+IGDB items always display their stored name. Search matches the stored name,
+both cached TMDB titles and the original title, combined with category filtering.
+
+The edit form opens with the displayed name and sends `nameWasEdited` for linked
+TMDB items. False preserves both the stored name and its custom/automatic state
+when saving unrelated changes. True marks the new name as custom. API callers
+that omit this flag mark a changed name as custom through the normal comparison.
+
+On collection load, the backend fills missing Finnish/English details for
+existing TMDB links using the configured credentials, with up to three parallel
+requests. Successful translations are persisted. Missing credentials skip this
+work; TMDB errors preserve collection access and use cached/original names.
+Failed translation attempts have a two-minute retry delay (five minutes for
+empty translations). Changing the UI language uses cached titles and makes no
+new API request. Secondary-language failures do not block a primary-language
+import. Source details remain in their stored source language.
+
+## TV seasons, episodes and ownership
+
+Migration `MyMediaCollection.API/Data/Migrations/008-add-tv-season-ownership.sql`
+adds nullable TMDB season/episode totals and cached season details, the
+`Collection.IsCompleteBox` flag, and `CollectionSeasons`. The migration has been
+applied locally after a backup, preserving existing collection and source data.
+Run it once after migration 007 for other databases before starting the API.
+Existing items start without an inferred complete box or owned seasons.
+
+TMDB TV details include `numberOfSeasons`, `numberOfEpisodes`, and `seasons`
+(season number, localized name and episode count). Search selection retrieves
+these through `GET /api/tmdb/details?tmdbId=603&mediaType=2&language=fi-FI` before
+showing ownership choices. Season 0 (specials) is excluded from regular-season
+choices. Cached source details show the totals in the editor. Collection loading
+fills missing totals for older linked series using the existing TMDB retry and
+credential handling; source totals are never inferred from user ownership.
+
+Manual addition, TMDB import and editing can set TV-only fields:
+
+```json
+{
+  "name": "My series",
+  "mediaType": 2,
+  "mediaFormat": 2,
+  "isCompleteBox": false,
+  "ownedSeasons": [
+    { "seasonNumber": 1, "mediaFormat": 1 },
+    { "seasonNumber": 3, "mediaFormat": 3 }
+  ]
+}
+```
+
+The default format is retained on the collection item; each owned season has its
+own DVD/Blu-ray/4K UHD Blu-ray/Other format. The table displays distinct owned
+formats and a Complete box marker where selected. With a complete box, all known
+regular seasons are included on save, preserving explicit per-season formats and
+using the default for missing ones. Manual series can enter a season count to
+build selection choices without requiring TMDB. That count is a form aid, not
+TMDB metadata; the owned season rows and complete-box flag are persisted.
+
+Unchecked seasons are not stored. Unchecking one season clears the complete-box
+checkbox; clearing the checkbox alone retains individual selections. Existing
+selections are restored when editing. Old API callers that omit both ownership
+fields preserve existing ownership on unrelated edits. Supplying an empty
+`ownedSeasons` list explicitly clears the selections. Clearing only the box flag
+preserves existing seasons. Ownership fields are rejected for non-TV categories.
+Season numbers must be unique and between 1 and 1000; only disc-format enums are
+allowed. Item updates and season replacements share a transaction, and deleting
+an item cascades to its owned season rows. Shared TMDB metadata remains intact.

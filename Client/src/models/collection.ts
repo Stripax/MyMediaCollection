@@ -65,16 +65,48 @@ export const gameStores = [
   { value: 6, label: 'Ubisoft Store' },
   { value: 7, label: 'Battle.net' },
   { value: 8, label: 'itch.io' },
+  { value: 9, label: 'Xbox Store' },
+  { value: 10, label: 'PlayStation Store' },
   { value: otherOption, label: 'Other' },
 ] as const
+
+export interface OwnedSeason {
+  seasonNumber: number
+  mediaFormat: number
+}
+
+export interface TmdbSeason {
+  seasonNumber: number
+  name: string
+  episodeCount: number | null
+}
+
+export interface CollectionSourceMetadata {
+  source: 'TMDB' | 'IGDB'
+  title: string
+  originalTitle: string | null
+  overview: string
+  releaseDate: string | null
+  language: string | null
+  platforms: string[]
+  fetchedAt: string | null
+  numberOfSeasons?: number | null
+  numberOfEpisodes?: number | null
+  seasons?: TmdbSeason[]
+}
 
 export interface CollectionItem {
   id: number
   name: string
+  isNameCustom?: boolean
+  localizedTitles?: Partial<Record<'fi' | 'en', string>> | null
   mediaType: number
   mediaFormat: number | null
   platform?: number | null
   store?: number | null
+  isPhysical?: boolean | null
+  isCompleteBox?: boolean
+  ownedSeasons?: OwnedSeason[]
   info: string | null
   createdAt?: string | null
   updatedAt?: string | null
@@ -82,4 +114,8 @@ export interface CollectionItem {
   tmdbMetadataId?: number | null
   tmdbId?: number | null
   posterPath?: string | null
+  igdbMetadataId?: number | null
+  igdbId?: number | null
+  coverImageId?: string | null
+  sourceMetadata?: CollectionSourceMetadata | null
 }

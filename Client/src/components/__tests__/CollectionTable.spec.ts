@@ -63,7 +63,49 @@ afterEach(() => {
 })
 
 describe('Collection table in the application', () => {
-  it('loads saved items and translates column headings and row actions without a category column', async () => {
+  it('changes automatic TMDB names with the UI language and searches both languages while preserving custom names', async () => {
+    const translated: CollectionItem[] = [
+      {
+        id: 21,
+        name: 'Tappajahai',
+        mediaType: 1,
+        mediaFormat: 2,
+        info: null,
+        tmdbId: 578,
+        isNameCustom: false,
+        localizedTitles: { fi: 'Tappajahai', en: 'Jaws' },
+      },
+      {
+        id: 22,
+        name: 'Oma kopio',
+        mediaType: 1,
+        mediaFormat: 2,
+        info: null,
+        tmdbId: 578,
+        isNameCustom: true,
+        localizedTitles: { fi: 'Tappajahai', en: 'Jaws' },
+      },
+      { id: 23, name: 'Manual name', mediaType: 1, mediaFormat: 2, info: null },
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(translated)))
+    const { app, i18n } = await mountApp()
+    expect(rowNames(app)).toEqual(['Tappajahai', 'Oma kopio', 'Manual name'])
+    i18n.global.locale.value = 'en'
+    await app.vm.$nextTick()
+    expect(rowNames(app)).toEqual(['Jaws', 'Oma kopio', 'Manual name'])
+    const input = app.get('input[type="search"]')
+    for (const query of ['tappajahai', 'JAWS']) {
+      await input.setValue(query)
+      await settleRows()
+      expect(rowNames(app)).toEqual(['Jaws', 'Oma kopio'])
+    }
+    await app.findAll('.side-bar-category')[2]!.trigger('click')
+    await flushPromises()
+    await settleRows()
+    expect(app.get('.collection-empty').text()).toBe(en.collection.noMatches)
+  })
+
+  it('loads saved items and translates the category column and row actions in the all view', async () => {
     const request = vi.fn().mockResolvedValue(jsonResponse(items))
     vi.stubGlobal('fetch', request)
     const { app, i18n } = await mountApp()
@@ -77,14 +119,27 @@ describe('Collection table in the application', () => {
     expect(app.get('th').text()).toBe(fi.itemForm.name)
     expect(app.find('caption').exists()).toBe(false)
     expect(app.get('table').attributes('aria-label')).toBe(fi.collection.title)
+    expect(app.findAll('.collection-category').map((cell) => cell.text())).toEqual([
+      fi.sidebar.boardGames,
+      fi.sidebar.videoGames,
+      fi.sidebar.tvSeries,
+      fi.sidebar.movies,
+    ])
     i18n.global.locale.value = 'en'
     await app.vm.$nextTick()
     expect(app.get('th').text()).toBe(en.itemForm.name)
     expect(app.findAll('th').map((header) => header.text())).toEqual([
       en.itemForm.name,
+      en.collection.category,
       en.collection.formatOrPlatform,
       en.itemForm.info,
       en.collection.actions,
+    ])
+    expect(app.findAll('.collection-category').map((cell) => cell.text())).toEqual([
+      en.sidebar.boardGames,
+      en.sidebar.videoGames,
+      en.sidebar.tvSeries,
+      en.sidebar.movies,
     ])
     expect(app.get('.collection-edit-button').attributes('aria-label')).toBe('Edit item Lautapeli')
     expect(app.get('.collection-delete-button').attributes('aria-label')).toBe(
@@ -153,8 +208,8 @@ describe('Collection table in the application', () => {
       vi.fn().mockImplementation(async () => jsonResponse(items)),
     )
     const { app, i18n } = await mountApp()
-    expect(app.findAll('tbody tr')[1]!.findAll('td')[1]!.text()).toBe('PlayStation 5')
-    expect(app.findAll('tbody tr')[3]!.findAll('td')[1]!.text()).toBe('4K UHD Blu-ray')
+    expect(app.findAll('tbody tr')[1]!.get('.collection-format').text()).toBe('PlayStation 5')
+    expect(app.findAll('tbody tr')[3]!.get('.collection-format').text()).toBe('4K UHD Blu-ray')
     for (const category of [1, 2]) {
       await app.findAll('.side-bar-category')[category]!.trigger('click')
       await flushPromises()
@@ -165,10 +220,43 @@ describe('Collection table in the application', () => {
     await flushPromises()
     await settleRows()
     expect(app.findAll('th')[1]!.text()).toBe('Alusta')
-    expect(app.findAll('tbody tr')[0]!.findAll('td')[1]!.text()).toBe('PlayStation 5')
+    expect(app.findAll('tbody tr')[0]!.get('.collection-format').text()).toBe('PlayStation 5')
     i18n.global.locale.value = 'en'
     await app.vm.$nextTick()
     expect(app.findAll('th')[1]!.text()).toBe('Platform')
+  })
+
+  it('shows translated physical, digital and unknown copy types only in the games view', async () => {
+    const games: CollectionItem[] = [true, false, null].map((isPhysical, index) => ({
+      id: index + 1,
+      name: `Game ${index}`,
+      mediaType: 3,
+      mediaFormat: null,
+      platform: 9,
+      info: null,
+      isPhysical,
+    }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(games)))
+    const { app, i18n } = await mountApp()
+    expect(app.find('.collection-copy-type').exists()).toBe(false)
+    await app.findAll('.side-bar-category')[3]!.trigger('click')
+    await flushPromises()
+    await settleRows()
+    expect(app.findAll('th')[2]!.text()).toBe(fi.collection.copyType)
+    expect(app.findAll('.collection-copy-type').map((cell) => cell.text())).toEqual([
+      'Fyysinen',
+      'Digitaalinen',
+      'Ei tiedossa',
+    ])
+    i18n.global.locale.value = 'en'
+    await app.vm.$nextTick()
+    expect(app.findAll('.collection-copy-type').map((cell) => cell.text())).toEqual([
+      'Physical',
+      'Digital',
+      'Unknown',
+    ])
+    await app.get('input[type="search"]').setValue('Not present')
+    expect(app.get('.collection-empty').attributes('colspan')).toBe('5')
   })
 
   it('translates Other formats, platforms and stores in the table', async () => {
@@ -187,14 +275,14 @@ describe('Collection table in the application', () => {
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(otherItems)))
     const { app, i18n } = await mountApp()
-    expect(app.findAll('tbody tr').map((row) => row.findAll('td')[1]!.text())).toEqual([
+    expect(app.findAll('tbody tr').map((row) => row.get('.collection-format').text())).toEqual([
       'Muu',
       'Muu',
       'PC · Muu',
     ])
     i18n.global.locale.value = 'en'
     await app.vm.$nextTick()
-    expect(app.findAll('tbody tr').map((row) => row.findAll('td')[1]!.text())).toEqual([
+    expect(app.findAll('tbody tr').map((row) => row.get('.collection-format').text())).toEqual([
       'Other',
       'Other',
       'PC · Other',
@@ -207,11 +295,11 @@ describe('Collection table in the application', () => {
     )
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(pcItems)))
     const { app } = await mountApp()
-    expect(app.findAll('tbody tr')[1]!.findAll('td')[1]!.text()).toBe('PC · Steam')
+    expect(app.findAll('tbody tr')[1]!.get('.collection-format').text()).toBe('PC · Steam')
     await app.findAll('.side-bar-category')[3]!.trigger('click')
     await flushPromises()
     await settleRows()
-    expect(app.findAll('tbody tr')[0]!.findAll('td')[1]!.text()).toBe('PC · Steam')
+    expect(app.findAll('tbody tr')[0]!.get('.collection-format').text()).toBe('PC · Steam')
   })
 
   it('shows the tabletop game type in the restored Format column and a four-column empty state', async () => {
@@ -220,7 +308,9 @@ describe('Collection table in the application', () => {
     )
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(legacyItems)))
     const { app } = await mountApp()
-    expect(app.findAll('tbody tr')[0]!.findAll('td')[1]!.text()).toBe(fi.gameTypes.boardGame)
+    expect(app.findAll('tbody tr')[0]!.get('.collection-format').text()).toBe(
+      fi.gameTypes.boardGame,
+    )
     await app.findAll('.side-bar-category')[4]!.trigger('click')
     await flushPromises()
     await settleRows()
@@ -244,7 +334,7 @@ describe('Collection table in the application', () => {
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(tabletopItems)))
     const { app, i18n } = await mountApp()
-    expect(app.findAll('tbody tr').map((row) => row.findAll('td')[1]!.text())).toEqual([
+    expect(app.findAll('tbody tr').map((row) => row.get('.collection-format').text())).toEqual([
       'Lautapeli',
       'Korttipeli',
       'Muu peli',
@@ -257,7 +347,7 @@ describe('Collection table in the application', () => {
     i18n.global.locale.value = 'en'
     await app.vm.$nextTick()
     expect(app.get('main h1').text()).toBe('Board and card games')
-    expect(app.findAll('tbody tr').map((row) => row.findAll('td')[1]!.text())).toEqual([
+    expect(app.findAll('tbody tr').map((row) => row.get('.collection-format').text())).toEqual([
       'Board game',
       'Card game',
       'Other game',
@@ -491,7 +581,14 @@ describe('Collection table in the application', () => {
     expect(request).toHaveBeenNthCalledWith(2, '/api/collection/2', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ MediaType: 2, Name: edited.name, MediaFormat: 3, Info: edited.info }),
+      body: JSON.stringify({
+        MediaType: 2,
+        Name: edited.name,
+        MediaFormat: 3,
+        Info: edited.info,
+        IsCompleteBox: false,
+        OwnedSeasons: [],
+      }),
     })
     expect(app.findAll('.side-bar-category')[2]!.attributes('aria-pressed')).toBe('true')
     await app.findAll('.side-bar-category')[0]!.trigger('click')

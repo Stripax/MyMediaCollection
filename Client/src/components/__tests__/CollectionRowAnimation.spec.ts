@@ -69,7 +69,7 @@ describe('Vue table row transitions', () => {
     await vi.waitFor(() => expect(lastRow.isConnected).toBe(false))
     expect(table.findAll('tbody')).toHaveLength(1)
     expect(table.findAll('tbody tr')).toHaveLength(1)
-    expect(table.get('.collection-empty').attributes('colspan')).toBe('4')
+    expect(table.get('.collection-empty').attributes('colspan')).toBe('5')
   })
 
   it('restores a usable row if a filter change brings it back before the exit finishes', async () => {

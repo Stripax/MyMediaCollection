@@ -12,6 +12,11 @@
     "otherGame": "Muu peli"
   },
   "collection": {
+    "copyType": "Kopiotyyppi",
+    "physicalCopy": "Fyysinen",
+    "digitalCopy": "Digitaalinen",
+    "unknownCopy": "Ei tiedossa",
+    "category": "Kategoria",
     "editTitles": {
       "all": "Muokkaa kohdetta",
       "movies": "Muokkaa elokuvaa",
@@ -59,7 +64,7 @@
     "gameTypeRequired": "Valitse lautapeli, korttipeli tai muu peli.",
     "store": "Kauppa",
     "chooseStore": "Valitse pelikauppa",
-    "storeRequired": "Valitse PC-pelin kauppa.",
+    "storeRequired": "Valitse digitaalisen PC-pelin kauppa.",
     "platform": "Alusta",
     "choosePlatform": "Valitse alusta",
     "platformRequired": "Valitse pelille alusta.",
@@ -81,7 +86,9 @@
     "name": "Nimi",
     "mediaFormat": "Formaatti",
     "info": "Lisätiedot",
-    "close": "Peruuta"
+    "close": "Peruuta",
+    "isPhysical": "Fyysinen kopio",
+    "chooseStoreOptional": "Valitse kauppa (valinnainen)"
   },
   "sidebar": {
     "categories": "Kategoriat",
@@ -133,5 +140,65 @@
     "rateLimited": "TMDB:n hakuraja ylittyi. Odota hetki ja yritä uudelleen.",
     "notFound": "Valittua teosta ei löydy TMDB:stä. Tee uusi haku.",
     "requestError": "TMDB-pyyntö epäonnistui. Yritä uudelleen tai lisää kohde manuaalisesti."
+  },
+  "igdb": {
+    "add": "Lisää IGDB-haulla",
+    "title": "Lisää videopeli IGDB-haulla",
+    "description": "Hae pelin nimellä, valitse teos ja täydennä oman kappaleesi alusta sekä lisätiedot. IGDB:n kuvaukset ovat yleensä englanniksi. Manuaalinen lisäys on edelleen käytettävissä.",
+    "searchLabel": "Videopelin nimi",
+    "searchPlaceholder": "Kirjoita pelin nimi…",
+    "search": "Hae IGDB:stä",
+    "searching": "Haetaan…",
+    "results": "Hakutulokset",
+    "select": "Valitse",
+    "noResults": "Pelejä ei löytynyt. Kokeile toista nimeä tai lisää kohde manuaalisesti.",
+    "noPoster": "Ei kansikuvaa",
+    "noOverview": "Pelille ei ole kuvausta saatavilla.",
+    "viewSource": "Näytä IGDB:ssä",
+    "changeSelection": "Vaihda valittua teosta",
+    "pages": "Hakutulosten sivut",
+    "previous": "Edellinen",
+    "next": "Seuraava",
+    "page": "Sivu {page}",
+    "credits": "Tietolähde ja tekijätiedot",
+    "notConfigured": "IGDB-hakua ei ole vielä otettu käyttöön. Voit lisätä pelin manuaalisesti.",
+    "credentialsError": "IGDB-tunnistautuminen epäonnistui. Tarkista backendin Twitch Client ID ja Client Secret.",
+    "rateLimited": "IGDB:n hakuraja ylittyi. Odota hetki ja yritä uudelleen.",
+    "notFound": "Valittua peliä ei löydy IGDB:stä. Tee uusi haku.",
+    "requestError": "IGDB-pyyntö epäonnistui. Yritä uudelleen tai lisää peli manuaalisesti.",
+    "availablePlatforms": "IGDB:n ilmoittamat alustat",
+    "attribution": "Pelitiedot ja kansikuvat: IGDB.com"
+  },
+  "sourceMetadata": {
+    "title": "{source}-tiedot",
+    "name": "Nimi palvelussa",
+    "originalTitle": "Alkuperäinen nimi",
+    "releaseYear": "Julkaisuvuosi",
+    "releaseDate": "Julkaisupäivä",
+    "firstAirDate": "Ensiesityspäivä",
+    "language": "Tietojen kieli",
+    "platforms": "Palvelun ilmoittamat alustat",
+    "overview": "Yhteenveto",
+    "fetchedAt": "Tiedot haettu",
+    "unknown": "Ei tiedossa",
+    "noOverview": "Yhteenvetoa ei ole saatavilla.",
+    "finnish": "Suomi",
+    "english": "Englanti"
+  },
+  "tvOwnership": {
+    "title": "Omistetut kaudet",
+    "completeBox": "Koko sarja",
+    "completeBoxShort": "Kokonainen boksi",
+    "help": "Valitse omistamasi kaudet ja kunkin kauden formaatti. Oletusformaattia käytetään uusille kausivalinnoille. Koko sarja valitsee kaikki tunnetut varsinaiset kaudet.",
+    "manualCount": "Kausien määrä (valintaa varten)",
+    "season": "Kausi {number}",
+    "seasonFormat": "Kauden {number} formaatti",
+    "episodes": "{count} jaksoa",
+    "totalSeasons": "Sarjassa {count} kautta",
+    "totalEpisodes": "Yhteensä {count} jaksoa",
+    "seasonCount": "Kausien määrä",
+    "episodeCount": "Jaksojen määrä",
+    "loading": "Haetaan sarjan kausitietoja…",
+    "defaultFormat": "Oletusformaatti"
   }
 }

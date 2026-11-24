@@ -70,7 +70,12 @@ describe('TMDB import', () => {
     expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe('The Matrix')
     await dialog.get('select[name="MediaFormat"]').setValue('3')
     await dialog.get('textarea[name="Info"]').setValue('Steelbook edition')
-    await dialog.get('.tmdb-import-form').trigger('submit')
+    const saveButton = dialog.get('.item-dialog-actions .tmdb-save-button')
+    expect((saveButton.element as HTMLButtonElement).form).toBe(
+      dialog.get('.tmdb-import-form').element,
+    )
+    expect(dialog.find('.item-dialog-actions .item-dialog-cancel').exists()).toBe(true)
+    await saveButton.trigger('click')
     await flushPromises()
     expect(request).toHaveBeenLastCalledWith('/api/tmdb/import', {
       method: 'POST',
@@ -78,6 +83,7 @@ describe('TMDB import', () => {
       body: JSON.stringify({
         tmdbId: 603,
         language: 'fi-FI',
+        useLocalizedName: true,
         item: { name: 'The Matrix', mediaType: 1, mediaFormat: 3, info: 'Steelbook edition' },
       }),
     })

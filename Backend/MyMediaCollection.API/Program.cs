@@ -7,6 +7,15 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddScoped<CollectionRepository>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<TmdbTitleService>();
+builder.Services.AddSingleton<IgdbAccess>();
+builder.Services.AddHttpClient("IgdbOAuth", client => client.Timeout = TimeSpan.FromSeconds(10)).RemoveAllLoggers();
+builder.Services.AddHttpClient<IgdbClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Igdb:BaseUrl"] ?? "https://api.igdb.com/v4/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).RemoveAllLoggers();
 builder.Services.AddHttpClient<TmdbClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Tmdb:BaseUrl"] ?? "https://api.themoviedb.org/3/");

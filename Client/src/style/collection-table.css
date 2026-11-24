@@ -68,6 +68,8 @@
 
 .collection-table {
   width: 100%;
+  min-width: 52rem;
+  table-layout: fixed;
   border-collapse: collapse;
   text-align: left;
 }
@@ -122,6 +124,14 @@
   background: var(--page-background);
 }
 
+.collection-table th:first-child {
+  width: 40%;
+}
+
+.collection-table th:last-child {
+  width: 8rem;
+}
+
 .collection-table td:first-child {
   font-weight: 600;
 }
@@ -131,7 +141,16 @@
   background-color: color-mix(in srgb, var(--accent) 10%, var(--surface));
 }
 
+.collection-name-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 .collection-name-button {
+  flex: 1;
+  min-width: 0;
   min-height: 2.75rem;
   max-width: 100%;
   padding: 0;
@@ -144,7 +163,9 @@
   text-align: left;
   text-decoration: underline;
   text-underline-offset: 0.2em;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .collection-name-button:hover {
@@ -152,10 +173,9 @@
 }
 
 .collection-poster {
-  float: left;
+  flex-shrink: 0;
   width: 48px;
   height: 72px;
-  margin-right: 0.75rem;
   object-fit: cover;
   border-radius: 0.25rem;
 }

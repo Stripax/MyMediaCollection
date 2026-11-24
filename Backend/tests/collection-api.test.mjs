@@ -33,9 +33,44 @@ test('collection API stores and validates items in an isolated SQLite database',
     database.prepare('DELETE FROM Collection WHERE Id = ?').run(id)
   })
   database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/004-add-tmdb-metadata.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/005-add-igdb-metadata.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/006-add-physical-copy.sql', import.meta.url), 'utf8'))
+  await t.test('name migration recognizes imported titles and preserves manual and renamed names', () => {
+    const metadataId = Number(database.prepare("INSERT INTO TmdbMetadata (TmdbId,MediaType,Language,Title,OriginalTitle,Overview,FetchedAt) VALUES (9999,1,'fi-FI','Tappajahai','Jaws','','2026-01-01T00:00:00Z')").run().lastInsertRowid);
+    database.prepare('INSERT INTO Collection (Name,MediaType,MediaFormat,TmdbMetadataId) VALUES (?,?,?,?)').run('Tappajahai',1,1,metadataId);
+    database.prepare('INSERT INTO Collection (Name,MediaType,MediaFormat,TmdbMetadataId) VALUES (?,?,?,?)').run('My custom title',1,1,metadataId);
+    database.prepare('INSERT INTO Collection (Name,MediaType,MediaFormat) VALUES (?,?,?)').run('Manual title',1,1);
+    database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/007-add-custom-name.sql', import.meta.url), 'utf8'));
+    assert.deepEqual(database.prepare('SELECT Name,IsNameCustom FROM Collection ORDER BY Id').all().map(row=>({...row})), [{Name:'Tappajahai',IsNameCustom:0},{Name:'My custom title',IsNameCustom:1},{Name:'Manual title',IsNameCustom:1}]);
+    database.exec('DELETE FROM Collection; DELETE FROM TmdbMetadata;');
+  })
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/008-add-tv-season-ownership.sql', import.meta.url), 'utf8'))
+  const igdbRequests = []
+  const tokenRequests = []
+  let rejectNextToken = false
   const tmdbRequests = []
   const tmdbServer = createHttpServer((request, response) => {
     const address = new URL(request.url, 'http://localhost')
+    if (address.pathname === '/oauth' || address.pathname === '/igdb/games') {
+      let body = '';
+      request.on('data', chunk => { body += chunk });
+      request.on('end', () => {
+        response.setHeader('Content-Type', 'application/json');
+        if (address.pathname === '/oauth') {
+          tokenRequests.push(Object.fromEntries(new URLSearchParams(body)));
+          response.end(JSON.stringify({access_token: 'igdb-test-token-' + tokenRequests.length, expires_in: 3600, token_type: 'bearer'})); return;
+        }
+        igdbRequests.push({ body, clientId: request.headers['client-id'], authorization: request.headers.authorization });
+        if (body.includes('search "unauthorized"') || rejectNextToken) { rejectNextToken = false; response.writeHead(401); response.end('{}'); return; }
+        if (body.includes('search "limited"')) { response.writeHead(429); response.end('{}'); return; }
+        if (body.includes('search "broken"')) { response.end('{broken json'); return; }
+        if (body.includes('where id = 404;')) { response.end('[]'); return; }
+        const id = Number(body.match(/where id = (\d+);/)?.[1] ?? 1942);
+        const game = {id, name: 'IGDB canonical title', slug: 'game-example', summary: 'Game overview', first_release_date: 1000000000, cover: {image_id: 'igdb_cover'}, platforms: [{id: 6, name: 'PC (Microsoft Windows)'}, {id: 167, name: 'PlayStation 5'}]};
+        response.end(JSON.stringify(body.includes('search "paginated"') ? Array.from({length: 21}, (_, index) => ({...game, id: 1942 + index})) : [game]));
+      });
+      return;
+    }
     tmdbRequests.push({ path: address.pathname, query: Object.fromEntries(address.searchParams), authorization: request.headers.authorization })
     response.setHeader('Content-Type', 'application/json')
     if (address.searchParams.get('query') === 'unauthorized') { response.writeHead(401); response.end('{}'); return }
@@ -43,7 +78,11 @@ test('collection API stores and validates items in an isolated SQLite database',
     if (address.pathname.endsWith('/404')) { response.writeHead(404); response.end('{}'); return }
     if (address.searchParams.get('query') === 'broken') { response.end('{bad json'); return }
     const tv = address.pathname.includes('/tv')
-    const data = { id: 603, title: 'The Matrix', original_title: 'The Matrix', name: 'TV example', original_name: 'Original TV example', overview: 'TMDB overview', release_date: '1999-03-30', first_air_date: '2001-04-05', poster_path: '/matrix.jpg' }
+    const localized = /\/(578|579|580)$/.test(address.pathname);
+    if (address.pathname.endsWith('/580') && address.searchParams.get('language') === 'en-US') { response.writeHead(503); response.end('{}'); return; }
+    const data = { id: localized ? Number(address.pathname.split('/').at(-1)) : 603, title: 'The Matrix', original_title: 'The Matrix', name: 'TV example', original_name: 'Original TV example', overview: 'TMDB overview', release_date: '1999-03-30', first_air_date: '2001-04-05', poster_path: '/matrix.jpg' }
+    if (tv) Object.assign(data, {number_of_seasons:3,number_of_episodes:24,seasons:[{season_number:0,name:'Specials',episode_count:2},{season_number:1,name:'Season 1',episode_count:8},{season_number:2,name:'Season 2',episode_count:8},{season_number:3,name:'Season 3',episode_count:8}]});
+    if (localized) { data.title = address.searchParams.get('language') === 'fi-FI' ? 'Tappajahai' : 'Jaws'; data.original_title = 'Jaws'; data.name = address.searchParams.get('language') === 'fi-FI' ? 'Fi-sarja' : 'English series'; data.original_name = 'Original series'; }
     response.end(JSON.stringify(address.pathname.includes('/search/') ? { page: 1, total_pages: 2, results: [{ ...data, ...(tv ? {} : { title: 'Matrix – hakutulos' }) }] } : data))
   })
   tmdbServer.listen(0, '127.0.0.1')
@@ -67,6 +106,10 @@ test('collection API stores and validates items in an isolated SQLite database',
       Tmdb__BaseUrl: `http://127.0.0.1:${tmdbServer.address().port}/3/`,
       Tmdb__ReadAccessToken: 'integration-test-token',
       Tmdb__ApiKey: '',
+      Igdb__ClientId: 'test-client-id',
+      Igdb__ClientSecret: 'test-client-secret',
+      Igdb__TokenUrl: `http://127.0.0.1:${tmdbServer.address().port}/oauth`,
+      Igdb__BaseUrl: `http://127.0.0.1:${tmdbServer.address().port}/igdb/`,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -116,7 +159,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     const row = database.prepare('SELECT * FROM Collection WHERE Id = ?').get(item.id)
     assert.ok(Number.isFinite(Date.parse(item.createdAt)))
     assert.equal(Date.parse(item.createdAt), Date.parse(row.CreatedAt))
-    assert.deepEqual({ ...row }, { Id: item.id, Name: item.name, MediaType: 2, MediaFormat: 3, Platform: null, Store: null, Info: 'Line 1\nLine 2', CreatedAt: row.CreatedAt, UpdatedAt: null, UserId: null, TmdbMetadataId: null })
+    assert.deepEqual({ ...row }, { Id: item.id, Name: item.name, MediaType: 2, MediaFormat: 3, Platform: null, Store: null, Info: 'Line 1\nLine 2', CreatedAt: row.CreatedAt, UpdatedAt: null, UserId: null, TmdbMetadataId: null, IgdbMetadataId: null, IsPhysical: null, IsNameCustom: 1, IsCompleteBox: 0 })
   })
   await t.test('supports every enum value and optional information', async () => {
     for (const mediaType of [1, 2]) {
@@ -134,7 +177,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(response.status, 200)
     const items = await response.json()
     assert.equal(items.length, Number(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count))
-    assert.deepEqual(items[0], { id, name: 'Manually added item', mediaType: 4, mediaFormat: null, platform: null, store: null, info: null, createdAt: null, updatedAt: null, userId: null, tmdbMetadataId: null, tmdbId: null, posterPath: null })
+    assert.deepEqual(items[0], { id, name: 'Manually added item', mediaType: 4, mediaFormat: null, platform: null, store: null, info: null, createdAt: null, updatedAt: null, userId: null, tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [] })
     assert.ok(items.every((item, index) => index === 0 || items[index - 1].id > item.id))
     assert.equal(items.at(-1).name, "Yö — O'Brien")
     for (const item of items.slice(1)) {
@@ -170,7 +213,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.deepEqual({ ...database.prepare('SELECT Platform, MediaFormat FROM Collection WHERE Id = ?').get(latest) }, { Platform: null, MediaFormat: 2 })
   })
   await t.test('creates and edits PC games with stores and clears the store when changing platforms', async () => {
-    for (let store = 1; store <= 8; store++) {
+    for (let store = 1; store <= 10; store++) {
       const response = await post({ name: `PC game ${store}`, mediaType: 3, platform: 26, store })
       assert.equal(response.status, 201)
       const item = await response.json()
@@ -224,14 +267,36 @@ test('collection API stores and validates items in an isolated SQLite database',
       })
     }
   })
-  await t.test('rejects missing and invalid PC stores and stores on consoles or other categories', async () => {
+  await t.test('persists physical copy flags and console stores and supports changing the flag', async () => {
+    for (const store of [9, 10]) {
+      const response = await post({name: 'Console copy', mediaType: 3, platform: 9, store, isPhysical: true})
+      assert.equal(response.status, 201)
+      const item = await response.json()
+      assert.equal(item.isPhysical, true)
+      assert.equal(item.store, store)
+      assert.equal(database.prepare('SELECT IsPhysical FROM Collection WHERE Id = ?').get(item.id).IsPhysical, 1)
+      const edit = await fetch(`${url}/${item.id}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Digital copy',mediaType:3,platform:9,store,isPhysical:false})})
+      assert.equal(edit.status, 200)
+      assert.equal((await edit.json()).isPhysical, false)
+      assert.equal(database.prepare('SELECT IsPhysical FROM Collection WHERE Id = ?').get(item.id).IsPhysical, 0)
+      assert.equal((await (await fetch(url)).json()).find(entry=>entry.id===item.id).isPhysical, false)
+    }
+    const pc = await post({name:'Physical PC',mediaType:3,platform:26,isPhysical:true})
+    assert.equal(pc.status,201)
+    const item = await pc.json()
+    assert.equal(item.isPhysical,true)
+    assert.equal(item.store,null)
+    for (const invalid of [{name:'Movie',mediaType:1,mediaFormat:2,isPhysical:true},{name:'Bad flag',mediaType:3,platform:9,isPhysical:'yes'}])
+      assert.equal((await post(invalid)).status,400)
+  })
+  await t.test('rejects missing and invalid PC stores and stores on other categories', async () => {
     const before = database.prepare('SELECT * FROM Collection ORDER BY Id').all()
     for (const fields of [
       { mediaType: 3, platform: 26 },
       { mediaType: 3, platform: 26, store: 0 },
       { mediaType: 3, platform: 26, store: 999 },
       { mediaType: 3, platform: 26, store: 'Steam' },
-      { mediaType: 3, platform: 9, store: 1 },
+      { mediaType: 3, platform: 9, store: 999 },
       { mediaType: 4, store: 1 },
       { mediaType: 1, mediaFormat: 1, store: 1 },
     ]) {
@@ -326,12 +391,12 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.deepEqual(updated, {
       id: created.id, name: "Muokattu O'Brien", mediaType: 2, mediaFormat: 3, platform: null, store: null, info: 'Edited\nInfo',
       createdAt: created.createdAt, updatedAt: updated.updatedAt, userId: null,
-      tmdbMetadataId: null, tmdbId: null, posterPath: null,
+      tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [],
     })
     assert.deepEqual({ ...database.prepare('SELECT * FROM Collection WHERE Id = ?').get(created.id) }, {
       Id: created.id, Name: "Muokattu O'Brien", MediaType: 2, MediaFormat: 3, Platform: null, Store: null, Info: 'Edited\nInfo',
       CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, UserId: null,
-      TmdbMetadataId: null,
+      TmdbMetadataId: null, IgdbMetadataId: null, IsPhysical: null, IsNameCustom: 1, IsCompleteBox: 0,
     })
     assert.deepEqual(database.prepare('SELECT * FROM Collection WHERE Id != ? ORDER BY Id').all(created.id), othersBefore)
   })
@@ -433,6 +498,13 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(metadata.Title, 'The Matrix')
     assert.equal(metadata.Overview, 'TMDB overview')
     assert.equal(metadata.ReleaseDate, '1999-03-30')
+    assert.equal(item.sourceMetadata.title, metadata.Title)
+    assert.equal(item.sourceMetadata.originalTitle, metadata.OriginalTitle)
+    assert.equal(item.sourceMetadata.overview, metadata.Overview)
+    assert.equal(item.sourceMetadata.releaseDate, '1999-03-30')
+    assert.equal(item.sourceMetadata.language, 'fi-FI')
+    assert.equal(item.sourceMetadata.source, 'TMDB')
+    assert.deepEqual(item.sourceMetadata.platforms, [])
     assert.match(metadata.FetchedAt, /Z$/)
     const copy = await (await importItem(1)).json()
     assert.notEqual(copy.id, item.id)
@@ -447,8 +519,10 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(updated.tmdbMetadataId, item.tmdbMetadataId)
     assert.equal(updated.tmdbId, 603)
     assert.equal(updated.posterPath, '/matrix.jpg')
+    assert.deepEqual(updated.sourceMetadata, { ...item.sourceMetadata, fetchedAt: updated.sourceMetadata.fetchedAt })
     const listed = (await (await fetch(url)).json()).find(entry => entry.id === item.id)
     assert.equal(listed.posterPath, '/matrix.jpg')
+    assert.deepEqual(listed.sourceMetadata, updated.sourceMetadata)
     assert.equal((await fetch(`${url}/${copy.id}`, { method: 'DELETE' })).status, 204)
     assert.ok(database.prepare('SELECT Id FROM TmdbMetadata WHERE Id = ?').get(item.tmdbMetadataId))
     const changeCategory = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Changed category', mediaType: 2, mediaFormat: 3 }) })
@@ -479,6 +553,198 @@ test('collection API stores and validates items in an isolated SQLite database',
     for (const parameters of ['query=x&mediaType=3', 'query=x&mediaType=1&page=501', 'query=x&mediaType=1&language=invalid', 'query= &mediaType=1']) {
       assert.equal((await fetch(`${tmdbUrl}/search?${parameters}`)).status, 400)
     }
+  })
+  await t.test('stores both TMDB title languages and preserves explicit name overrides', async () => {
+    const importTitle = (mediaType, name, useLocalizedName = true) => fetch(`http://127.0.0.1:${port}/api/tmdb/import`, {
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tmdbId:578,language:'fi-FI',useLocalizedName,item:{name,mediaType,mediaFormat:2}}),
+    })
+    for (const mediaType of [1,2]) {
+      const response = await importTitle(mediaType, mediaType === 1 ? 'Tappajahai' : 'Fi-sarja')
+      assert.equal(response.status,201)
+      const item = await response.json()
+      assert.equal(item.isNameCustom,false)
+      assert.deepEqual(item.localizedTitles,mediaType===1?{fi:'Tappajahai',en:'Jaws'}:{fi:'Fi-sarja',en:'English series'})
+      const unchanged = await fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:mediaType===1?'Jaws':'English series',mediaType,mediaFormat:3,info:'Own notes',nameWasEdited:false})})
+      const saved = await unchanged.json()
+      assert.equal(saved.name,item.name)
+      assert.equal(saved.isNameCustom,false)
+      const renamed = await fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'My chosen title',mediaType,mediaFormat:3,nameWasEdited:true})})
+      const custom = await renamed.json()
+      assert.equal(custom.name,'My chosen title')
+      assert.equal(custom.isNameCustom,true)
+      assert.deepEqual(custom.localizedTitles,item.localizedTitles)
+    }
+    const customImport = await (await importTitle(1,'My imported copy',false)).json()
+    assert.equal(customImport.name,'My imported copy')
+    assert.equal(customImport.isNameCustom,true)
+  })
+  await t.test('backfills missing legacy title translations without renaming stored items and caches them', async () => {
+    const metadataId = Number(database.prepare("INSERT INTO TmdbMetadata (TmdbId,MediaType,Language,Title,OriginalTitle,Overview,FetchedAt) VALUES (579,1,'fi-FI','Tappajahai','Jaws','','2026-01-01T00:00:00Z')").run().lastInsertRowid)
+    const id = Number(database.prepare('INSERT INTO Collection (Name,MediaType,MediaFormat,TmdbMetadataId,IsNameCustom) VALUES (?,?,?,?,?)').run('Tappajahai',1,2,metadataId,0).lastInsertRowid)
+    const list = await (await fetch(url)).json()
+    const item = list.find(entry=>entry.id===id)
+    assert.deepEqual(item.localizedTitles,{fi:'Tappajahai',en:'Jaws'})
+    assert.equal(database.prepare('SELECT Name FROM Collection WHERE Id=?').get(id).Name,'Tappajahai')
+    const requestsBefore = tmdbRequests.length
+    await fetch(url)
+    assert.equal(tmdbRequests.length,requestsBefore)
+  })
+  await t.test('keeps imports and collection reads usable when the secondary language is unavailable', async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/api/tmdb/import`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tmdbId:580,language:'fi-FI',useLocalizedName:true,item:{name:'Tappajahai',mediaType:1,mediaFormat:2}})})
+    assert.equal(response.status,201)
+    const item = await response.json()
+    assert.deepEqual(item.localizedTitles,{fi:'Tappajahai'})
+    assert.equal(item.sourceMetadata.originalTitle,'Jaws')
+    assert.equal((await fetch(url)).status,200)
+    const requestsBefore = tmdbRequests.length
+    assert.equal((await fetch(url)).status,200)
+    assert.equal(tmdbRequests.length,requestsBefore)
+  })
+  await t.test('TMDB TV details include regular season and episode totals and exclude specials from ownership choices', async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/api/tmdb/details?tmdbId=603&mediaType=2&language=fi-FI`)
+    assert.equal(response.status,200)
+    const details=await response.json()
+    assert.equal(details.numberOfSeasons,3)
+    assert.equal(details.numberOfEpisodes,24)
+    assert.deepEqual(details.seasons.map(season=>season.seasonNumber),[1,2,3])
+    assert.equal(details.seasons[0].episodeCount,8)
+  })
+  await t.test('stores season ownership with separate formats, handles complete boxes and updates it atomically', async () => {
+    const response=await fetch(`http://127.0.0.1:${port}/api/tmdb/import`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tmdbId:603,language:'fi-FI',useLocalizedName:true,item:{name:'Series copy',mediaType:2,mediaFormat:2,isCompleteBox:false,ownedSeasons:[{seasonNumber:1,mediaFormat:1},{seasonNumber:3,mediaFormat:3}]}})})
+    assert.equal(response.status,201)
+    const item=await response.json()
+    assert.equal(item.isCompleteBox,false)
+    assert.deepEqual(item.ownedSeasons,[{seasonNumber:1,mediaFormat:1},{seasonNumber:3,mediaFormat:3}])
+    assert.equal(item.sourceMetadata.numberOfSeasons,3)
+    assert.equal(item.sourceMetadata.numberOfEpisodes,24)
+    const update=body=>fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Series copy',mediaType:2,mediaFormat:3,...body})})
+    const partial=await update({isCompleteBox:false,ownedSeasons:[{seasonNumber:2,mediaFormat:2}]})
+    assert.equal(partial.status,200)
+    assert.deepEqual((await partial.json()).ownedSeasons,[{seasonNumber:2,mediaFormat:2}])
+    const complete=await (await update({isCompleteBox:true})).json()
+    assert.equal(complete.isCompleteBox,true)
+    assert.deepEqual(complete.ownedSeasons,[{seasonNumber:1,mediaFormat:3},{seasonNumber:2,mediaFormat:2},{seasonNumber:3,mediaFormat:3}])
+    const unboxed=await (await update({isCompleteBox:false})).json()
+    assert.equal(unboxed.isCompleteBox,false)
+    assert.deepEqual(unboxed.ownedSeasons,complete.ownedSeasons)
+    const legacy=await (await update({info:'Unrelated edit'})).json()
+    assert.deepEqual(legacy.ownedSeasons,complete.ownedSeasons)
+    const listed=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+    assert.deepEqual(listed.ownedSeasons,complete.ownedSeasons)
+    const before=database.prepare('SELECT * FROM Collection WHERE Id=?').get(item.id)
+    const ownedBefore=database.prepare('SELECT * FROM CollectionSeasons WHERE CollectionItemId=? ORDER BY SeasonNumber').all(item.id)
+    database.exec("CREATE TRIGGER RejectSeason BEFORE INSERT ON CollectionSeasons WHEN NEW.SeasonNumber=3 BEGIN SELECT RAISE(ABORT,'test failure'); END;")
+    try {
+      assert.equal((await update({name:'Must roll back',ownedSeasons:[{seasonNumber:3,mediaFormat:1}]})).status,503)
+      assert.deepEqual(database.prepare('SELECT * FROM Collection WHERE Id=?').get(item.id),before)
+      assert.deepEqual(database.prepare('SELECT * FROM CollectionSeasons WHERE CollectionItemId=? ORDER BY SeasonNumber').all(item.id),ownedBefore)
+    } finally { database.exec('DROP TRIGGER RejectSeason') }
+    for(const invalid of [
+      {ownedSeasons:[{seasonNumber:0,mediaFormat:1}]},
+      {ownedSeasons:[{seasonNumber:1001,mediaFormat:1}]},
+      {ownedSeasons:[{seasonNumber:1,mediaFormat:4}]},
+      {ownedSeasons:[{seasonNumber:1,mediaFormat:1},{seasonNumber:1,mediaFormat:2}]},
+      {ownedSeasons:[null]},
+      {mediaType:1,isCompleteBox:true},
+      {mediaType:1,ownedSeasons:[{seasonNumber:1,mediaFormat:1}]},
+    ]) assert.equal((await update(invalid)).status,400)
+    assert.equal((await fetch(`${url}/${item.id}`,{method:'DELETE'})).status,204)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionSeasons WHERE CollectionItemId=?').get(item.id).count,0)
+    const manual=await post({name:'Manual box',mediaType:2,mediaFormat:2,isCompleteBox:true,ownedSeasons:[{seasonNumber:1,mediaFormat:1},{seasonNumber:2,mediaFormat:2}]})
+    assert.equal(manual.status,201)
+    const box=await manual.json()
+    assert.equal(box.isCompleteBox,true)
+    assert.equal(box.ownedSeasons.length,2)
+    assert.equal(box.sourceMetadata,null)
+  })
+  await t.test('IGDB searches with escaped APICalypse input, caches OAuth tokens and refreshes rejected tokens', async () => {
+    const endpoint = `http://127.0.0.1:${port}/api/igdb/search`
+    const query = 'Halo "; limit 500; \\ name'
+    const response = await fetch(`${endpoint}?query=${encodeURIComponent(query)}&page=2`)
+    assert.equal(response.status, 200)
+    const data = await response.json()
+    assert.equal(data.page, 2)
+    assert.equal(data.results[0].igdbId, 1942)
+    assert.equal(data.results[0].coverImageId, 'igdb_cover')
+    assert.equal(data.results[0].releaseDate, '2001-09-09')
+    assert.equal(data.results[0].sourceUrl, 'https://www.igdb.com/games/game-example')
+    assert.deepEqual(data.results[0].platforms, ['PC (Microsoft Windows)', 'PlayStation 5'])
+    assert.equal(tokenRequests.length, 1)
+    assert.deepEqual(tokenRequests[0], {client_id: 'test-client-id', client_secret: 'test-client-secret', grant_type: 'client_credentials'})
+    assert.equal(igdbRequests.at(-1).body, `search "${query.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"; fields name,slug,summary,first_release_date,cover.image_id,platforms.name; limit 21; offset 20;`)
+    assert.equal(igdbRequests.at(-1).clientId, 'test-client-id')
+    assert.equal(igdbRequests.at(-1).authorization, 'Bearer igdb-test-token-1')
+    const next = await (await fetch(`${endpoint}?query=paginated`)).json()
+    assert.equal(next.results.length, 20)
+    assert.equal(next.hasNextPage, true)
+    assert.equal(tokenRequests.length, 1)
+    rejectNextToken = true
+    assert.equal((await fetch(`${endpoint}?query=Halo`)).status, 200)
+    assert.equal(tokenRequests.length, 2)
+    assert.equal(igdbRequests.at(-1).authorization, 'Bearer igdb-test-token-2')
+    assert.ok(!JSON.stringify(data).includes('igdb-test-token'))
+  })
+  await t.test('IGDB imports share canonical metadata, save console or PC copy details and preserve covers on edit', async () => {
+    const importGame = (platform, store, isPhysical = false) => fetch(`http://127.0.0.1:${port}/api/igdb/import`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ igdbId: 1942, coverImageId: 'untrusted', item: {name: 'My game', mediaType: 3, platform, ...(store ? {store} : {}), isPhysical, info: 'Own edition'} }),
+    })
+    const response = await importGame(9, 10, true)
+    assert.equal(response.status, 201)
+    const item = await response.json()
+    assert.equal(item.igdbId, 1942)
+    assert.equal(item.isPhysical, true)
+    assert.equal(item.store, 10)
+    assert.equal(item.coverImageId, 'igdb_cover')
+    assert.equal(item.mediaFormat, null)
+    assert.equal(item.tmdbMetadataId, null)
+    const pc = await (await importGame(26, 1)).json()
+    assert.equal(pc.igdbMetadataId, item.igdbMetadataId)
+    assert.equal(pc.store, 1)
+    const metadata = database.prepare('SELECT * FROM IgdbMetadata WHERE Id = ?').get(item.igdbMetadataId)
+    assert.equal(metadata.Title, 'IGDB canonical title')
+    assert.equal(metadata.Overview, 'Game overview')
+    assert.equal(metadata.CoverImageId, 'igdb_cover')
+    assert.equal(item.sourceMetadata.title, metadata.Title)
+    assert.equal(item.sourceMetadata.source, 'IGDB')
+    assert.equal(item.sourceMetadata.overview, 'Game overview')
+    assert.equal(item.sourceMetadata.releaseDate, '2001-09-09')
+    assert.deepEqual(item.sourceMetadata.platforms, ['PC (Microsoft Windows)', 'PlayStation 5'])
+    assert.equal(item.sourceMetadata.language, null)
+    assert.match(metadata.FetchedAt, /Z$/)
+    const edit = await fetch(`${url}/${item.id}`, {method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name:'Edited game', mediaType:3, platform:8})})
+    assert.equal(edit.status, 200)
+    const updated = await edit.json()
+    assert.equal(updated.igdbMetadataId, item.igdbMetadataId)
+    assert.equal(updated.coverImageId, 'igdb_cover')
+    assert.equal(updated.sourceMetadata.title, 'IGDB canonical title')
+    assert.equal(updated.sourceMetadata.overview, 'Game overview')
+    assert.equal((await (await fetch(url)).json()).find(entry => entry.id === item.id).coverImageId, 'igdb_cover')
+    assert.equal((await fetch(`${url}/${item.id}`, {method:'DELETE'})).status, 204)
+    assert.ok(database.prepare('SELECT Id FROM IgdbMetadata WHERE Id = ?').get(pc.igdbMetadataId))
+    const changeCategory = await fetch(`${url}/${pc.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:'Changed', mediaType:1, mediaFormat:2})})
+    assert.equal((await changeCategory.json()).igdbMetadataId, null)
+  })
+  await t.test('IGDB failures, missing games and invalid copy details never save partial data', async () => {
+    const endpoint = `http://127.0.0.1:${port}/api/igdb`
+    const before = database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count
+    for (const [query, status, code] of [['limited',429,'igdb_rate_limited'],['unauthorized',502,'igdb_credentials'],['broken',502,'igdb_unavailable']]) {
+      const response = await fetch(`${endpoint}/search?query=${query}`)
+      assert.equal(response.status,status)
+      const error = await response.json()
+      assert.equal(error.code,code)
+      assert.ok(!JSON.stringify(error).includes('test-client-secret'))
+    }
+    for (const body of [
+      {igdbId:1942,item:{name:'Movie',mediaType:1,mediaFormat:2}},
+      {igdbId:1942,item:{name:'Game',mediaType:3}},
+      {igdbId:1942,item:{name:'PC',mediaType:3,platform:26}},
+      {igdbId:-1,item:{name:'Game',mediaType:3,platform:9}},
+    ]) assert.equal((await fetch(`${endpoint}/import`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).status,400)
+    const missing = await fetch(`${endpoint}/import`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({igdbId:404,item:{name:'Missing',mediaType:3,platform:9}})})
+    assert.equal(missing.status,404)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count,before)
+    for (const params of ['query=x&page=501','query=','query=%0Ax']) assert.equal((await fetch(`${endpoint}/search?${params}`)).status,400)
   })
   await t.test('forwards client /api requests through the Vite proxy', async () => {
     const { createServer: createViteServer } = await import('../../Client/node_modules/vite/dist/node/index.js')

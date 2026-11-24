@@ -1,0 +1,38 @@
+.source-details {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--page-background);
+  overflow-wrap: anywhere;
+}
+
+.source-details h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+}
+
+.source-details dl {
+  display: grid;
+  gap: 0.875rem;
+  margin: 0;
+}
+
+.source-details-row {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.source-details dt {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.source-details dd {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.source-details-overview {
+  white-space: pre-wrap;
+}

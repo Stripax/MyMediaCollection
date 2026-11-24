@@ -71,6 +71,7 @@ public sealed class TmdbClient(HttpClient http, IConfiguration configuration)
     private static TmdbMetadata Map(JsonElement item, MediaType type, string language)
     {
         static string Text(JsonElement value, string key) => value.TryGetProperty(key, out var field) && field.ValueKind == JsonValueKind.String ? field.GetString()! : "";
+        static int? Count(JsonElement value, string key) => value.TryGetProperty(key, out var field) && field.ValueKind == JsonValueKind.Number && field.TryGetInt32(out var count) && count >= 0 ? count : null;
         var poster = Text(item, "poster_path");
         if (!item.TryGetProperty("id", out var identifier) || !identifier.TryGetInt64(out var id) || id <= 0)
             throw new TmdbException("tmdb_unavailable", 502);
@@ -81,6 +82,13 @@ public sealed class TmdbClient(HttpClient http, IConfiguration configuration)
             Title = Text(item, type == MediaType.Movie ? "title" : "name"),
             OriginalTitle = Text(item, type == MediaType.Movie ? "original_title" : "original_name"),
             Overview = Text(item, "overview"), ReleaseDate = date.Length > 0 ? date : null,
+            NumberOfSeasons = type == MediaType.TvSeries ? Count(item, "number_of_seasons") : null,
+            NumberOfEpisodes = type == MediaType.TvSeries ? Count(item, "number_of_episodes") : null,
+            Seasons = type == MediaType.TvSeries && item.TryGetProperty("seasons", out var seasons) && seasons.ValueKind == JsonValueKind.Array
+                ? seasons.EnumerateArray().Where(season => season.ValueKind == JsonValueKind.Object)
+                    .Where(season => Count(season, "season_number") is > 0 and <= 1000)
+                    .Select(season => new TmdbSeason(Count(season, "season_number")!.Value, Text(season, "name"), Count(season, "episode_count")))
+                    .DistinctBy(season => season.SeasonNumber).OrderBy(season => season.SeasonNumber).ToList() : [],
             PosterPath = Regex.IsMatch(poster, @"^/[A-Za-z0-9_-]+\.(jpg|jpeg|png|webp)$", RegexOptions.IgnoreCase) ? poster : null
         };
     }

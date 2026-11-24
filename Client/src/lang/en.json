@@ -12,6 +12,11 @@
     "otherGame": "Other game"
   },
   "collection": {
+    "copyType": "Copy type",
+    "physicalCopy": "Physical",
+    "digitalCopy": "Digital",
+    "unknownCopy": "Unknown",
+    "category": "Category",
     "editTitles": {
       "all": "Edit item",
       "movies": "Edit movie",
@@ -59,7 +64,7 @@
     "gameTypeRequired": "Select board game, card game or other game.",
     "store": "Store",
     "chooseStore": "Select a game store",
-    "storeRequired": "Select the store for the PC game.",
+    "storeRequired": "Select the store for the digital PC game.",
     "platform": "Platform",
     "choosePlatform": "Select a platform",
     "platformRequired": "Select a platform for the game.",
@@ -81,7 +86,9 @@
     "name": "Name",
     "mediaFormat": "Format",
     "info": "Additional information",
-    "close": "Cancel"
+    "close": "Cancel",
+    "isPhysical": "Physical copy",
+    "chooseStoreOptional": "Select a store (optional)"
   },
   "sidebar": {
     "categories": "Categories",
@@ -133,5 +140,65 @@
     "rateLimited": "TMDB request limit reached. Wait a moment and try again.",
     "notFound": "The selected title is no longer available on TMDB. Search again.",
     "requestError": "The TMDB request failed. Try again or add the item manually."
+  },
+  "igdb": {
+    "add": "Add with IGDB search",
+    "title": "Add a video game with IGDB",
+    "description": "Search by game name, select a title and enter the platform and details of your own copy. IGDB descriptions are usually in English. Manual addition is still available.",
+    "searchLabel": "Video game name",
+    "searchPlaceholder": "Enter a game name…",
+    "search": "Search IGDB",
+    "searching": "Searching…",
+    "results": "Search results",
+    "select": "Select",
+    "noResults": "No games found. Try another name or add the game manually.",
+    "noPoster": "No poster",
+    "noOverview": "No overview is available for this game.",
+    "viewSource": "View on IGDB",
+    "changeSelection": "Choose a different title",
+    "pages": "Search result pages",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}",
+    "credits": "Data source and credits",
+    "notConfigured": "IGDB search has not been configured yet. You can add the game manually.",
+    "credentialsError": "IGDB authentication failed. Check the backend Twitch Client ID and Client Secret.",
+    "rateLimited": "IGDB request limit reached. Wait a moment and try again.",
+    "notFound": "The selected game is no longer available on IGDB. Search again.",
+    "requestError": "The IGDB request failed. Try again or add the game manually.",
+    "availablePlatforms": "Platforms listed by IGDB",
+    "attribution": "Game data and cover images: IGDB.com"
+  },
+  "sourceMetadata": {
+    "title": "{source} details",
+    "name": "Title in source",
+    "originalTitle": "Original title",
+    "releaseYear": "Release year",
+    "releaseDate": "Release date",
+    "firstAirDate": "First air date",
+    "language": "Data language",
+    "platforms": "Platforms listed by source",
+    "overview": "Overview",
+    "fetchedAt": "Data retrieved",
+    "unknown": "Unknown",
+    "noOverview": "No overview is available.",
+    "finnish": "Finnish",
+    "english": "English"
+  },
+  "tvOwnership": {
+    "title": "Owned seasons",
+    "completeBox": "Entire series",
+    "completeBoxShort": "Complete box",
+    "help": "Select the seasons you own and the format of each season. The default format is used for newly selected seasons. Entire series selects all known regular seasons.",
+    "manualCount": "Number of seasons (for selection)",
+    "season": "Season {number}",
+    "seasonFormat": "Season {number} format",
+    "episodes": "{count} episodes",
+    "totalSeasons": "{count} seasons in the series",
+    "totalEpisodes": "{count} episodes in total",
+    "seasonCount": "Number of seasons",
+    "episodeCount": "Number of episodes",
+    "loading": "Loading season details…",
+    "defaultFormat": "Default format"
   }
 }

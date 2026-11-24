@@ -10,5 +10,7 @@ public enum GameStore
     UbisoftStore = 6,
     BattleNet = 7,
     ItchIo = 8,
+    XboxStore = 9,
+    PlayStationStore = 10,
     Other = 99
 }

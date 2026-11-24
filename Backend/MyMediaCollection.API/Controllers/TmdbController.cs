@@ -24,13 +24,30 @@ public sealed class TmdbController(TmdbClient tmdb, CollectionRepository reposit
         catch (TmdbException exception) { return TmdbProblem(exception); }
     }
 
+    [HttpGet("details")]
+    public async Task<ActionResult<TmdbMetadata>> Details(
+        [FromQuery, Range(1, int.MaxValue)] int tmdbId, [FromQuery, Range(1, 2)] int mediaType,
+        CancellationToken cancellationToken, [FromQuery, RegularExpression("^(fi-FI|en-US)$")] string language = "en-US")
+    {
+        try { return Ok(await tmdb.DetailsAsync((MediaType)mediaType, tmdbId, language, cancellationToken)); }
+        catch (TmdbException exception) { return TmdbProblem(exception); }
+    }
+
     [HttpPost("import")]
     public async Task<ActionResult<CollectionItem>> Import(TmdbImportRequest request, CancellationToken cancellationToken)
     {
         try
         {
             var metadata = await tmdb.DetailsAsync(request.Item.MediaType, request.TmdbId, request.Language, cancellationToken);
-            return StatusCode(201, await repository.CreateAsync(request.Item, cancellationToken, metadata));
+            var translations = new List<TmdbMetadata> { metadata };
+            try
+            {
+                translations.Add(await tmdb.DetailsAsync(request.Item.MediaType, request.TmdbId,
+                    request.Language == "fi-FI" ? "en-US" : "fi-FI", cancellationToken));
+            }
+            catch (TmdbException) { /* Keep primary-language imports usable while the other translation is unavailable. */ }
+            return StatusCode(201, await repository.CreateAsync(request.Item, cancellationToken, metadata,
+                translations: translations, useLocalizedName: request.UseLocalizedName));
         }
         catch (TmdbException exception) { return TmdbProblem(exception); }
         catch (SqliteException exception)

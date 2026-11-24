@@ -2,6 +2,7 @@
 import { Dialog } from '@ark-ui/vue/dialog'
 import { nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { displayItemName } from '../models/itemNames'
 import ToolbarTooltip from './ToolbarTooltip.vue'
 import ToolbarIcon from './ToolbarIcon.vue'
 import { snackbarElements, useSnackbar } from '../composables/useSnackbar'
@@ -9,7 +10,7 @@ import type { CollectionItem } from '../models/collection'
 
 const props = defineProps<{ item: CollectionItem }>()
 const emit = defineEmits<{ deleted: [] }>()
-const { t } = useI18n({ useScope: 'global' })
+const { t, locale } = useI18n({ useScope: 'global' })
 const open = ref(false)
 const deleting = ref(false)
 const error = ref('')
@@ -68,7 +69,7 @@ async function remove() {
         ref="trigger"
         :disabled="pendingDelete || transitioning"
         class="collection-delete-button collection-icon-button"
-        :aria-label="t('collection.deleteItem', { name: item.name })"
+        :aria-label="t('collection.deleteItem', { name: displayItemName(item, locale) })"
         :aria-describedby="describedby"
         @click="error = ''"
       >
@@ -93,13 +94,16 @@ async function remove() {
                 t('collection.deleteTitle')
               }}</Dialog.Title>
               <Dialog.Description class="item-dialog-description">{{
-                t('collection.deleteConfirmation', { name: item.name })
+                t('collection.deleteConfirmation', { name: displayItemName(item, locale) })
               }}</Dialog.Description>
               <p v-if="error" role="alert" class="item-form-error">{{ t(error) }}</p>
               <div class="item-dialog-actions">
-                <Dialog.CloseTrigger type="button" :disabled="deleting">{{
-                  t('collection.cancel')
-                }}</Dialog.CloseTrigger>
+                <Dialog.CloseTrigger
+                  class="item-dialog-cancel"
+                  type="button"
+                  :disabled="deleting"
+                  >{{ t('collection.cancel') }}</Dialog.CloseTrigger
+                >
                 <button
                   type="button"
                   class="collection-delete-confirm"

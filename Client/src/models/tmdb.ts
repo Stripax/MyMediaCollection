@@ -1,3 +1,5 @@
+import type { TmdbSeason } from './collection'
+
 export interface TmdbResult {
   tmdbId: number
   mediaType: number
@@ -7,6 +9,9 @@ export interface TmdbResult {
   overview: string
   releaseDate: string | null
   posterPath: string | null
+  numberOfSeasons?: number | null
+  numberOfEpisodes?: number | null
+  seasons?: TmdbSeason[]
 }
 
 export interface TmdbSearchPage {

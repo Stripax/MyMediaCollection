@@ -39,6 +39,155 @@ afterEach(() => {
 })
 
 describe('Collection item dialog', () => {
+  it.each([false, true])(
+    'tracks name changes separately from other edits for a localized TMDB item (renaming: %s)',
+    async (renaming) => {
+      const request = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+      vi.stubGlobal('fetch', request)
+      const dialog = await openForm('en', {
+        id: 110,
+        name: 'Tappajahai',
+        mediaType: 1,
+        mediaFormat: 2,
+        info: null,
+        tmdbId: 578,
+        isNameCustom: false,
+        localizedTitles: { fi: 'Tappajahai', en: 'Jaws' },
+      })
+      expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe('Jaws')
+      await dialog.get('textarea[name="Info"]').setValue('Own notes')
+      if (renaming) await dialog.get('input[name="Name"]').setValue('My own title')
+      await dialog.get('form').trigger('submit')
+      const body = JSON.parse(request.mock.calls[0]![1].body)
+      expect(body.NameWasEdited).toBe(renaming)
+      expect(body.Name).toBe(renaming ? 'My own title' : 'Jaws')
+    },
+  )
+
+  it('prefills and edits a physical console copy and its console store', async () => {
+    const request = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('fi', {
+      id: 105,
+      name: 'Console game',
+      mediaType: 3,
+      mediaFormat: null,
+      platform: 3,
+      store: 9,
+      isPhysical: true,
+      info: null,
+    })
+    const physical = dialog.get('input[name="IsPhysical"]')
+    expect((physical.element as HTMLInputElement).checked).toBe(true)
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).value).toBe('9')
+    expect(dialog.get('select[name="Store"] option[value="10"]').text()).toBe('PlayStation Store')
+    await physical.setValue(false)
+    await dialog.get('select[name="Store"]').setValue('10')
+    await dialog.get('form').trigger('submit')
+    expect(request).toHaveBeenCalledWith(
+      '/api/collection/105',
+      expect.objectContaining({ method: 'PUT' }),
+    )
+    expect(JSON.parse(request.mock.calls[0]![1].body)).toMatchObject({
+      IsPhysical: false,
+      Store: 10,
+      Platform: 3,
+    })
+  })
+
+  it('adds a physical PC copy without requiring a digital store', async () => {
+    const request = vi.fn().mockResolvedValue(new Response('{}', { status: 201 }))
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('fi', undefined, 'videoGames')
+    await dialog.get('input[name="Name"]').setValue('Boxed PC game')
+    await dialog.get('select[name="Platform"]').setValue('26')
+    await dialog.get('input[name="IsPhysical"]').setValue(true)
+    expect(dialog.get('select[name="Store"]').attributes('required')).toBeUndefined()
+    await dialog.get('form').trigger('submit')
+    const body = JSON.parse(request.mock.calls[0]![1].body)
+    expect(body.IsPhysical).toBe(true)
+    expect(body.Platform).toBe(26)
+    expect(body).not.toHaveProperty('Store')
+  })
+
+  it.each([
+    ['fi', 'TMDB'],
+    ['en', 'TMDB'],
+    ['fi', 'IGDB'],
+    ['en', 'IGDB'],
+  ] as const)(
+    'shows stored %s %s metadata read-only while saving personal changes separately',
+    async (locale, source) => {
+      const request = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+      vi.stubGlobal('fetch', request)
+      const labels = locale === 'fi' ? fi : en
+      const dialog = await openForm(locale, {
+        id: 101,
+        name: 'Own copy',
+        mediaType: source === 'TMDB' ? 2 : 3,
+        mediaFormat: source === 'TMDB' ? 2 : null,
+        platform: source === 'IGDB' ? 9 : null,
+        info: 'Personal notes',
+        sourceMetadata: {
+          source,
+          title: 'Imported title',
+          originalTitle: source === 'TMDB' ? 'Original title' : null,
+          overview: 'Imported overview\nSecond line',
+          releaseDate: '2023-09-10',
+          language: source === 'TMDB' ? 'fi-FI' : null,
+          platforms: source === 'IGDB' ? ['PlayStation 5', 'PC'] : [],
+          fetchedAt: '2026-11-24T08:00:00Z',
+        },
+      })
+      const details = dialog.get('.source-details')
+      expect(details.text()).toContain('Imported title')
+      expect(details.text()).toContain('2023')
+      expect(details.text()).toContain('Imported overview')
+      expect(details.text()).toContain(labels.sourceMetadata.overview)
+      expect(details.get('time').attributes('datetime')).toBe('2023-09-10')
+      expect(details.findAll('input, textarea, select')).toHaveLength(0)
+      if (source === 'IGDB') expect(details.text()).toContain('PlayStation 5, PC')
+      else {
+        expect(details.text()).toContain('Original title')
+        expect(details.text()).toContain(labels.sourceMetadata.firstAirDate)
+        expect(details.text()).toContain(labels.sourceMetadata.finnish)
+      }
+      expect((dialog.get('textarea[name="Info"]').element as HTMLTextAreaElement).value).toBe(
+        'Personal notes',
+      )
+      await dialog.get('input[name="Name"]').setValue('Renamed copy')
+      await dialog.get('form').trigger('submit')
+      const body = JSON.parse(request.mock.calls[0]![1].body)
+      expect(body.Name).toBe('Renamed copy')
+      expect(body.Info).toBe('Personal notes')
+      expect(body).not.toHaveProperty('sourceMetadata')
+    },
+  )
+
+  it('handles missing source dates and overviews without affecting the manual fields', async () => {
+    const dialog = await openForm('fi', {
+      id: 102,
+      name: 'Incomplete title',
+      mediaType: 1,
+      mediaFormat: 1,
+      info: null,
+      sourceMetadata: {
+        source: 'TMDB',
+        title: 'Incomplete title',
+        originalTitle: null,
+        overview: '',
+        releaseDate: null,
+        language: null,
+        platforms: [],
+        fetchedAt: null,
+      },
+    })
+    expect(dialog.get('.source-details').text()).toContain(fi.sourceMetadata.unknown)
+    expect(dialog.get('.source-details').text()).toContain(fi.sourceMetadata.noOverview)
+    expect(dialog.find('.source-details time').exists()).toBe(false)
+    expect(dialog.find('input[name="Name"]').exists()).toBe(true)
+  })
+
   it.each([
     ['fi', false],
     ['en', false],
@@ -94,7 +243,8 @@ describe('Collection item dialog', () => {
           Name: 'Uusi kohde',
           MediaFormat: mediaType === 4 ? 4 : mediaType < 3 ? 1 : null,
           Info: '',
-          ...(mediaType === 3 ? { Platform: 9 } : {}),
+          ...(mediaType === 3 ? { Platform: 9, IsPhysical: false } : {}),
+          ...(mediaType === 2 ? { IsCompleteBox: false, OwnedSeasons: [] } : {}),
         }),
       })
     },
@@ -217,13 +367,14 @@ describe('Collection item dialog', () => {
           MediaFormat: null,
           Info: '',
           Platform: 9,
+          IsPhysical: false,
         }),
       })
     },
   )
 
   it.each(['fi', 'en'])(
-    'only shows Store after PC is selected and saves the chosen store in %s',
+    'shows Store for every game platform and saves the chosen store in %s',
     async (locale) => {
       const request = vi.fn().mockResolvedValue(new Response('{}', { status: 201 }))
       vi.stubGlobal('fetch', request)
@@ -232,7 +383,7 @@ describe('Collection item dialog', () => {
       expect(dialog.find('select[name="Store"]').exists()).toBe(false)
       await dialog.get('select[name="MediaType"]').setValue('3')
       await dialog.get('select[name="Platform"]').setValue('9')
-      expect(dialog.find('select[name="Store"]').exists()).toBe(false)
+      expect(dialog.find('select[name="Store"]').exists()).toBe(true)
       await dialog.get('select[name="Platform"]').setValue('26')
       expect(dialog.findAll('label > span')[3]!.text()).toBe(labels.itemForm.store)
       expect(dialog.findAll('select[name="Store"] option').map((option) => option.text())).toEqual([
@@ -245,6 +396,8 @@ describe('Collection item dialog', () => {
         'Ubisoft Store',
         'Battle.net',
         'itch.io',
+        'Xbox Store',
+        'PlayStation Store',
         labels.common.other,
       ])
       await dialog.get('input[name="Name"]').setValue('PC game')
@@ -263,6 +416,7 @@ describe('Collection item dialog', () => {
           Info: '',
           Platform: 26,
           Store: 1,
+          IsPhysical: false,
         }),
       })
     },
@@ -293,7 +447,7 @@ describe('Collection item dialog', () => {
       expect(dialog.get('select[name="Platform"] option[value="99"]').text()).toBe(other)
       await dialog.get('select[name="Platform"]').setValue('99')
       await dialog.get('input[name="Name"]').setValue('Other platform')
-      expect(dialog.find('select[name="Store"]').exists()).toBe(false)
+      expect(dialog.find('select[name="Store"]').exists()).toBe(true)
       await dialog.get('form').trigger('submit')
       expect(request).toHaveBeenLastCalledWith('/api/collection', {
         method: 'POST',
@@ -304,6 +458,7 @@ describe('Collection item dialog', () => {
           MediaFormat: null,
           Info: '',
           Platform: 99,
+          IsPhysical: false,
         }),
       })
       await vi.waitFor(() =>
@@ -327,6 +482,7 @@ describe('Collection item dialog', () => {
           Info: '',
           Platform: 26,
           Store: 99,
+          IsPhysical: false,
         }),
       })
     },
@@ -373,12 +529,13 @@ describe('Collection item dialog', () => {
         Info: '',
         Platform: 26,
         Store: 3,
+        IsPhysical: false,
       }),
     })
   })
 
   it.each(['console', 'movie', 'boardGame'])(
-    'hides and omits Store after switching PC to a %s',
+    'retains the console store and omits Store for other categories after switching PC to a %s',
     async (target) => {
       const request = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
       vi.stubGlobal('fetch', request)
@@ -394,11 +551,12 @@ describe('Collection item dialog', () => {
         if (target === 'movie') await dialog.get('select[name="MediaFormat"]').setValue('2')
         if (target === 'boardGame') await dialog.get('select[name="MediaFormat"]').setValue('4')
       }
-      expect(dialog.find('select[name="Store"]').exists()).toBe(false)
+      expect(dialog.find('select[name="Store"]').exists()).toBe(target === 'console')
       await dialog.get('form').trigger('submit')
       const options = request.mock.calls[0]![1] as RequestInit
       const body = JSON.parse(options.body as string)
-      expect(body).not.toHaveProperty('Store')
+      if (target === 'console') expect(body.Store).toBe(1)
+      else expect(body).not.toHaveProperty('Store')
       expect(body.Platform).toBe(target === 'console' ? 9 : undefined)
     },
   )
@@ -426,6 +584,7 @@ describe('Collection item dialog', () => {
         MediaFormat: null,
         Info: 'Muistiinpanot',
         Platform: 18,
+        IsPhysical: false,
       }),
     })
   })
@@ -606,7 +765,14 @@ describe('Collection item dialog', () => {
     expect(request).toHaveBeenCalledWith('/api/collection', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ MediaType: 2, Name: 'Elokuva', MediaFormat: 3, Info: 'Lisätiedot' }),
+      body: JSON.stringify({
+        MediaType: 2,
+        Name: 'Elokuva',
+        MediaFormat: 3,
+        Info: 'Lisätiedot',
+        IsCompleteBox: false,
+        OwnedSeasons: [],
+      }),
     })
     expect(dialog.get('button[type="submit"]').attributes('disabled')).toBeDefined()
     finish(new Response('{}', { status: 201 }))

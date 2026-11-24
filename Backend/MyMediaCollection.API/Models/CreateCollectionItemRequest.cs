@@ -6,6 +6,10 @@ public sealed class CreateCollectionItemRequest : IValidatableObject
 {
     [Required, StringLength(300)]
     public string Name { get; init; } = string.Empty;
+    public bool? NameWasEdited { get; init; }
+    public bool? IsCompleteBox { get; init; }
+    [MaxLength(1000)]
+    public IReadOnlyList<OwnedSeason>? OwnedSeasons { get; init; }
 
     [EnumDataType(typeof(MediaType))]
     public MediaType MediaType { get; init; }
@@ -18,21 +22,31 @@ public sealed class CreateCollectionItemRequest : IValidatableObject
 
     [EnumDataType(typeof(GameStore))]
     public GameStore? Store { get; init; }
+    public bool? IsPhysical { get; init; }
 
     [StringLength(10000)]
     public string? Info { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (MediaType == MediaType.VideoGame && Platform == GamePlatform.Pc)
+        if (MediaType != MediaType.TvSeries && (IsCompleteBox == true || OwnedSeasons?.Count > 0))
+            yield return new ValidationResult("Season ownership is only available for TV series.", [nameof(OwnedSeasons)]);
+        if (OwnedSeasons?.Any(season => season is null) == true)
+            yield return new ValidationResult("Owned seasons cannot contain null values.", [nameof(OwnedSeasons)]);
+        else if (OwnedSeasons is not null && OwnedSeasons.Select(season => season.SeasonNumber).Distinct().Count() != OwnedSeasons.Count)
+            yield return new ValidationResult("Each owned season must occur only once.", [nameof(OwnedSeasons)]);
+        if (MediaType == MediaType.VideoGame && Platform == GamePlatform.Pc && IsPhysical != true)
         {
             if (Store is null)
                 yield return new ValidationResult("Select the store for a PC game.", [nameof(Store)]);
         }
-        else if (Store is not null)
+        if (MediaType != MediaType.VideoGame && Store is not null)
         {
-            yield return new ValidationResult("Store is only available for PC games.", [nameof(Store)]);
+            yield return new ValidationResult("Store is only available for video games.", [nameof(Store)]);
         }
+
+        if (MediaType != MediaType.VideoGame && IsPhysical is not null)
+            yield return new ValidationResult("Copy type is only available for video games.", [nameof(IsPhysical)]);
 
         if (MediaType == MediaType.VideoGame)
         {

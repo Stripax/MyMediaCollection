@@ -2,12 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using MyMediaCollection.API.Data;
 using MyMediaCollection.API.Models;
+using MyMediaCollection.API.Services;
 
 namespace MyMediaCollection.API.Controllers;
 
 [ApiController]
 [Route("api/collection")]
-public sealed class CollectionController(CollectionRepository repository, ILogger<CollectionController> logger) : ControllerBase
+public sealed class CollectionController(CollectionRepository repository, TmdbTitleService titles, ILogger<CollectionController> logger) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<CollectionItem>>(StatusCodes.Status200OK)]
@@ -16,7 +17,9 @@ public sealed class CollectionController(CollectionRepository repository, ILogge
     {
         try
         {
-            return Ok(await repository.GetAllAsync(cancellationToken));
+            var items = await repository.GetAllAsync(cancellationToken);
+            if (await titles.EnsureTitlesAsync(items, cancellationToken)) items = await repository.GetAllAsync(cancellationToken);
+            return Ok(items);
         }
         catch (SqliteException exception)
         {
