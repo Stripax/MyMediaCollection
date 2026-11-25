@@ -1,4 +1,6 @@
-# Backend
+# MyMediaCollection
+
+## Backend
 
 Run the API from the repository root:
 
@@ -50,7 +52,7 @@ format. Set `mediaFormat` to null or omit it for a video game:
 ```
 
 `GamePlatform` values and console names are defined in
-`MyMediaCollection.API/Models/GamePlatform.cs`; the corresponding client options
+`Backend/MyMediaCollection.API/Models/GamePlatform.cs`; the corresponding client options
 are in `Client/src/models/collection.ts`. Platforms 1–25 cover Xbox, PlayStation,
 Nintendo and Sega consoles; PC is platform 26. Digital PC games require `store`, a
 numeric `GameStore` enum value: Steam = 1, GOG = 2, Epic Games Store = 3,
@@ -98,7 +100,7 @@ database must already contain the manually managed `Collection` table with
 `Id INTEGER PRIMARY KEY`, `Name TEXT NOT NULL`, `MediaType INTEGER NOT NULL`,
 `MediaFormat INTEGER`, `Platform INTEGER`, `Store INTEGER`, and `Info TEXT`.
 The API creates no databases or tables.
-Run `MyMediaCollection.API/Data/Migrations/003-add-item-metadata.sql` once after
+Run `Backend/MyMediaCollection.API/Data/Migrations/003-add-item-metadata.sql` once after
 the first two migrations to add nullable `CreatedAt TEXT`, `UpdatedAt TEXT`, and
 `UserId TEXT` columns. Existing items keep NULL for unknown historical metadata.
 The local workspace database has this migration applied as well.
@@ -115,11 +117,11 @@ There is no users table, foreign key or user-based access filtering yet. The
 user identifier type and foreign key should be finalized with authentication.
 
 For an existing database without the Platform column, run
-`MyMediaCollection.API/Data/Migrations/001-add-platform.sql` once. It adds a
+`Backend/MyMediaCollection.API/Data/Migrations/001-add-platform.sql` once. It adds a
 nullable column and preserves existing data. Games without a platform remain
 unassigned until a console is selected when editing; old disc values are never
 interpreted as platform values. For a database without Store, run
-`MyMediaCollection.API/Data/Migrations/002-add-store.sql` once after the first
+`Backend/MyMediaCollection.API/Data/Migrations/002-add-store.sql` once after the first
 migration. Both columns are nullable and existing data is preserved. The local
 workspace database has already been updated. Restart and rebuild the backend
 after updating the source code.
@@ -145,7 +147,7 @@ use the selected UI language (`fi-FI` or `en-US`), support pagination, and let
 the user choose a title before entering their copy's format and personal notes.
 The item name is prefilled but can be changed. Search alone saves nothing.
 
-Run `MyMediaCollection.API/Data/Migrations/004-add-tmdb-metadata.sql` once after
+Run `Backend/MyMediaCollection.API/Data/Migrations/004-add-tmdb-metadata.sql` once after
 migration 003. It adds `TmdbMetadata` and the nullable `Collection.TmdbMetadataId`
 foreign key. This migration has been applied to the local workspace database;
 its existing items are preserved and remain unlinked. Restart/rebuild the API
@@ -239,7 +241,7 @@ serialized with at least 300 ms between starts to stay below the documented
 four-requests-per-second limit. Credentials and tokens are never returned to
 the browser; logging is disabled for the IGDB and OAuth HTTP clients.
 
-Migration `MyMediaCollection.API/Data/Migrations/005-add-igdb-metadata.sql`
+Migration `Backend/MyMediaCollection.API/Data/Migrations/005-add-igdb-metadata.sql`
 creates `IgdbMetadata` and the nullable `Collection.IgdbMetadataId` foreign key.
 It has been applied to the local workspace database after a backup. Other
 databases must run it once after migration 004 before starting the new API.
@@ -300,7 +302,7 @@ overwrite the cached source metadata.
 
 ## Physical video game copies
 
-Migration `MyMediaCollection.API/Data/Migrations/006-add-physical-copy.sql` adds
+Migration `Backend/MyMediaCollection.API/Data/Migrations/006-add-physical-copy.sql` adds
 nullable `IsPhysical INTEGER`, constrained to 0/1 or NULL. It has been applied to
 the local database after a backup, preserving existing rows and leaving their
 historical copy type unknown (NULL). Run it once after migration 005 in other
@@ -320,7 +322,7 @@ values are unchanged. Regular POST/PUT and IGDB import all use the same rules.
 
 ## Localized TMDB item names
 
-Migration `MyMediaCollection.API/Data/Migrations/007-add-custom-name.sql` adds
+Migration `Backend/MyMediaCollection.API/Data/Migrations/007-add-custom-name.sql` adds
 `Collection.IsNameCustom`. The local database has been migrated after a backup;
 other databases must run it once after migration 006. Existing manual and
 renamed items default to custom names. A linked movie/TV item whose stored name
@@ -361,7 +363,7 @@ dictionary use the original overview. The source-language row is hidden.
 
 ## TV seasons, episodes and ownership
 
-Migration `MyMediaCollection.API/Data/Migrations/008-add-tv-season-ownership.sql`
+Migration `Backend/MyMediaCollection.API/Data/Migrations/008-add-tv-season-ownership.sql`
 adds nullable TMDB season/episode totals and cached season details, the
 `Collection.IsCompleteBox` flag, and `CollectionSeasons`. The migration has been
 applied locally after a backup, preserving existing collection and source data.
@@ -439,7 +441,7 @@ in a frontend `.env` file or committed application settings. See the official
 [BGG authentication guide](https://boardgamegeek.com/using_the_xml_api) and
 [XML API2 reference](https://boardgamegeek.com/wiki/page/BGG_XML_API2).
 
-Apply `MyMediaCollection.API/Data/Migrations/010-add-bgg-metadata.sql` once after
+Apply `Backend/MyMediaCollection.API/Data/Migrations/010-add-bgg-metadata.sql` once after
 migration 009 before running the updated API. It creates `BggMetadata` and a
 nullable `Collection.BggMetadataId` reference. Existing items remain unchanged.
 The local database is backed up before applying this migration. No automatic
