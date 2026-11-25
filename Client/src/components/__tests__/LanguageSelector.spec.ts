@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createMemoryHistory } from 'vue-router'
 import { createAppRouter } from '../../router'
 import App from '../../App.vue'
 import en from '../../lang/en.json'
 import fi from '../../lang/fi.json'
+import finnishFlag from '../../assets/flags/fi.svg'
+import englishFlag from '../../assets/flags/gb.svg'
 
 let wrapper: VueWrapper | undefined
 const originalTitle = document.title
@@ -45,6 +47,153 @@ afterEach(() => {
 })
 
 describe('Language selector', () => {
+  it('uses the current rain speed and brightness as defaults and updates them live', async () => {
+    localStorage.setItem('mmc-theme', 'black')
+    const app = await mountApp()
+    await app.get('.theme-trigger').trigger('click')
+    const menu = new DOMWrapper(document.querySelector<HTMLElement>('.theme-menu')!)
+    expect((menu.get('input[name="MatrixRainSpeed"]').element as HTMLInputElement).value).toBe(
+      '100',
+    )
+    expect((menu.get('input[name="MatrixRainBrightness"]').element as HTMLInputElement).value).toBe(
+      '55',
+    )
+    expect((app.get('.matrix-rain').element as HTMLElement).style.opacity).toBe('0.55')
+    await menu.get('input[name="MatrixRainSpeed"]').setValue(150)
+    await menu.get('input[name="MatrixRainBrightness"]').setValue(80)
+    expect((menu.get('input[name="MatrixRainDensity"]').element as HTMLInputElement).value).toBe(
+      '100',
+    )
+    expect(app.findAll('.matrix-rain-column')).toHaveLength(48)
+    const firstColumn = app.get('.matrix-rain-column').text()
+    await menu.get('input[name="MatrixRainDensity"]').setValue(200)
+    expect(app.findAll('.matrix-rain-column')).toHaveLength(96)
+    expect(app.get('.matrix-rain-column').text()).toBe(firstColumn)
+    expect(localStorage.getItem('mmc-matrix-rain-density')).toBe('200')
+    expect(
+      (app.get('.matrix-rain').element as HTMLElement).style.getPropertyValue('--rain-speed'),
+    ).toBe('1.5')
+    expect((app.get('.matrix-rain').element as HTMLElement).style.opacity).toBe('0.8')
+    expect(localStorage.getItem('mmc-matrix-rain-speed')).toBe('150')
+    expect(localStorage.getItem('mmc-matrix-rain-brightness')).toBe('80')
+    expect(app.get('.theme-trigger').attributes('aria-expanded')).toBe('true')
+    await menu.get('input[name="MatrixRainSpeed"]').trigger('keydown', { key: 'ArrowRight' })
+    expect(document.activeElement).not.toBe(app.get('.theme-trigger').element)
+    menu
+      .get('.matrix-rain-toggle')
+      .element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await app.vm.$nextTick()
+    expect(menu.find('.matrix-rain-settings').exists()).toBe(false)
+    expect(localStorage.getItem('mmc-matrix-rain-speed')).toBe('150')
+    expect(localStorage.getItem('mmc-matrix-rain-brightness')).toBe('80')
+    await menu.get('.matrix-rain-toggle').trigger('click')
+    expect((menu.get('input[name="MatrixRainDensity"]').element as HTMLInputElement).value).toBe(
+      '200',
+    )
+    expect(app.findAll('.matrix-rain-column')).toHaveLength(96)
+    expect((menu.get('input[name="MatrixRainSpeed"]').element as HTMLInputElement).value).toBe(
+      '150',
+    )
+    expect((menu.get('input[name="MatrixRainBrightness"]').element as HTMLInputElement).value).toBe(
+      '80',
+    )
+  })
+
+  it.each(['fi', 'en'])(
+    'restores and saves the rain defaults from the %s menu',
+    async (language) => {
+      localStorage.setItem('mmc-language', language)
+      localStorage.setItem('mmc-theme', 'black')
+      localStorage.setItem('mmc-matrix-rain-speed', '175')
+      localStorage.setItem('mmc-matrix-rain-brightness', '90')
+      localStorage.setItem('mmc-matrix-rain-density', '300')
+      let app = await mountApp()
+      await app.get('.theme-trigger').trigger('click')
+      const menu = new DOMWrapper(document.querySelector<HTMLElement>('.theme-menu')!)
+      expect(menu.get('.matrix-rain-reset').text()).toBe(
+        language === 'fi' ? fi.topBar.matrixRainReset : en.topBar.matrixRainReset,
+      )
+      await menu.get('.matrix-rain-reset').trigger('click')
+      expect((menu.get('input[name="MatrixRainDensity"]').element as HTMLInputElement).value).toBe(
+        '100',
+      )
+      expect(app.findAll('.matrix-rain-column')).toHaveLength(48)
+      expect(localStorage.getItem('mmc-matrix-rain-density')).toBe('100')
+      expect((menu.get('input[name="MatrixRainSpeed"]').element as HTMLInputElement).value).toBe(
+        '100',
+      )
+      expect(
+        (menu.get('input[name="MatrixRainBrightness"]').element as HTMLInputElement).value,
+      ).toBe('55')
+      expect((app.get('.matrix-rain').element as HTMLElement).style.opacity).toBe('0.55')
+      expect(
+        (app.get('.matrix-rain').element as HTMLElement).style.getPropertyValue('--rain-speed'),
+      ).toBe('1')
+      expect(localStorage.getItem('mmc-matrix-rain-speed')).toBe('100')
+      expect(localStorage.getItem('mmc-matrix-rain-brightness')).toBe('55')
+      expect(app.get('.theme-trigger').attributes('aria-expanded')).toBe('true')
+      expect(localStorage.getItem('mmc-matrix-rain')).toBe('true')
+      app.unmount()
+      app = await mountApp()
+      expect((app.get('.matrix-rain').element as HTMLElement).style.opacity).toBe('0.55')
+      expect(
+        (app.get('.matrix-rain').element as HTMLElement).style.getPropertyValue('--rain-speed'),
+      ).toBe('1')
+    },
+  )
+
+  it.each([
+    ['175', '90', '175', '90'],
+    ['invalid', 'Infinity', '100', '55'],
+    ['0', '200', '100', '55'],
+  ])(
+    'restores valid rain settings or falls back to defaults (%s, %s)',
+    async (speed, brightness, expectedSpeed, expectedBrightness) => {
+      localStorage.setItem('mmc-theme', 'black')
+      localStorage.setItem('mmc-matrix-rain-speed', speed)
+      localStorage.setItem('mmc-matrix-rain-brightness', brightness)
+      const app = await mountApp()
+      await app.get('.theme-trigger').trigger('click')
+      const menu = new DOMWrapper(document.querySelector<HTMLElement>('.theme-menu')!)
+      expect((menu.get('input[name="MatrixRainSpeed"]').element as HTMLInputElement).value).toBe(
+        expectedSpeed,
+      )
+      expect(
+        (menu.get('input[name="MatrixRainBrightness"]').element as HTMLInputElement).value,
+      ).toBe(expectedBrightness)
+      expect((app.get('.matrix-rain').element as HTMLElement).style.opacity).toBe(
+        String(Number(expectedBrightness) / 100),
+      )
+    },
+  )
+
+  it.each([
+    ['250', '250', 120],
+    ['50', '50', 24],
+    ['0', '0', 0],
+    ['-25', '100', 48],
+    ['invalid', '100', 48],
+    ['999', '100', 48],
+  ])(
+    'restores saved text amount or uses the current default (%s)',
+    async (stored, expected, count) => {
+      localStorage.setItem('mmc-theme', 'black')
+      localStorage.setItem('mmc-matrix-rain-density', stored)
+      const app = await mountApp()
+      expect(app.findAll('.matrix-rain-column')).toHaveLength(count)
+      await app.get('.theme-trigger').trigger('click')
+      const menu = new DOMWrapper(document.querySelector<HTMLElement>('.theme-menu')!)
+      expect((menu.get('input[name="MatrixRainDensity"]').element as HTMLInputElement).value).toBe(
+        expected,
+      )
+      await menu.get('input[name="MatrixRainDensity"]').setValue(0)
+      expect(app.findAll('.matrix-rain-column')).toHaveLength(0)
+      expect(localStorage.getItem('mmc-matrix-rain-density')).toBe('0')
+      await menu.get('input[name="MatrixRainDensity"]').setValue(25)
+      expect(app.findAll('.matrix-rain-column')).toHaveLength(12)
+    },
+  )
+
   it('selects and persists all themes from the settings menu', async () => {
     const app = await mountApp()
     const trigger = app.get('.theme-trigger')
@@ -56,8 +205,54 @@ describe('Language selector', () => {
       await app.vm.$nextTick()
       expect(document.documentElement.dataset.theme).toBe(theme)
       expect(localStorage.getItem('mmc-theme')).toBe(theme)
+      expect(app.find('.matrix-rain').exists()).toBe(theme === 'black')
+      expect(document.querySelector('.matrix-rain-toggle') !== null).toBe(theme === 'black')
+      expect(document.querySelector('.matrix-rain-settings') !== null).toBe(theme === 'black')
       await vi.waitFor(() => expect(trigger.attributes('aria-expanded')).toBe('false'))
     }
+  })
+
+  it.each([true, false])('restores the saved code rain preference (%s)', async (enabled) => {
+    localStorage.setItem('mmc-theme', 'black')
+    localStorage.setItem('mmc-matrix-rain', String(enabled))
+    const app = await mountApp()
+    expect(app.find('.matrix-rain').exists()).toBe(enabled)
+    await app.get('.theme-trigger').trigger('click')
+    const toggle = document.querySelector('.matrix-rain-toggle')!
+    expect(toggle.getAttribute('role')).toBe('menuitemcheckbox')
+    expect(toggle.getAttribute('aria-checked')).toBe(String(enabled))
+    expect(toggle.textContent).toContain(en.topBar.matrixRain)
+    expect(document.querySelector('.matrix-rain-settings') !== null).toBe(enabled)
+  })
+
+  it('saves code rain changes and preserves the choice across themes and remounting', async () => {
+    localStorage.setItem('mmc-theme', 'black')
+    let app = await mountApp()
+    await app.get('.theme-trigger').trigger('click')
+    document.querySelector<HTMLElement>('.matrix-rain-toggle')!.click()
+    await app.vm.$nextTick()
+    expect(app.find('.matrix-rain').exists()).toBe(false)
+    expect(localStorage.getItem('mmc-matrix-rain')).toBe('false')
+    expect(app.get('.theme-trigger').attributes('aria-expanded')).toBe('true')
+    document.querySelector<HTMLElement>('[role="menuitemradio"][data-value="dark"]')!.click()
+    await vi.waitFor(() =>
+      expect(app.get('.theme-trigger').attributes('aria-expanded')).toBe('false'),
+    )
+    expect(document.querySelector('.matrix-rain-toggle')).toBeNull()
+    await app.get('.theme-trigger').trigger('click')
+    document.querySelector<HTMLElement>('[role="menuitemradio"][data-value="black"]')!.click()
+    await vi.waitFor(() =>
+      expect(app.get('.theme-trigger').attributes('aria-expanded')).toBe('false'),
+    )
+    expect(app.find('.matrix-rain').exists()).toBe(false)
+    app.unmount()
+    app = await mountApp()
+    expect(app.find('.matrix-rain').exists()).toBe(false)
+    await app.get('.theme-trigger').trigger('click')
+    document.querySelector<HTMLElement>('.matrix-rain-toggle')!.click()
+    await app.vm.$nextTick()
+    expect(app.find('.matrix-rain').exists()).toBe(true)
+    expect(localStorage.getItem('mmc-matrix-rain')).toBe('true')
   })
 
   it.each(['en', 'fi'])('restores black mode with its %s menu label', async (language) => {
@@ -65,6 +260,8 @@ describe('Language selector', () => {
     localStorage.setItem('mmc-theme', 'black')
     const app = await mountApp()
     expect(document.documentElement.dataset.theme).toBe('black')
+    expect(app.get('.matrix-rain').attributes('aria-hidden')).toBe('true')
+    expect(app.findAll('.matrix-rain-column')).toHaveLength(48)
     await app.get('.theme-trigger').trigger('click')
     const blackMode = document.querySelector('[role="menuitemradio"][data-value="black"]')!
     expect(blackMode.getAttribute('aria-checked')).toBe('true')
@@ -162,12 +359,17 @@ describe('Language selector', () => {
       language === 'fi' ? fi.selectLanguage : en.selectLanguage,
     )
     await app.get('.language-trigger').trigger('click')
-    expect(
-      document.querySelector('[role="menuitemradio"][data-value="fi"]')?.textContent,
-    ).toContain('🇫🇮Suomi')
-    expect(
-      document.querySelector('[role="menuitemradio"][data-value="en"]')?.textContent,
-    ).toContain('🇬🇧English')
+    for (const [code, name, flag] of [
+      ['fi', 'Suomi', finnishFlag],
+      ['en', 'English', englishFlag],
+    ]) {
+      const option = document.querySelector(`[role="menuitemradio"][data-value="${code}"]`)!
+      expect(option.textContent).toContain(name)
+      const image = option.querySelector('img')!
+      expect(image.getAttribute('src')).toBe(flag)
+      expect(image.getAttribute('alt')).toBe('')
+      expect(image.getAttribute('aria-hidden')).toBe('true')
+    }
     expect(
       document
         .querySelector(`[data-value="${language}"][role="menuitemradio"]`)

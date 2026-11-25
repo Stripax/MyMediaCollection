@@ -7,7 +7,14 @@ public sealed class CreateCollectionItemRequest : IValidatableObject
     [Required, StringLength(300)]
     public string Name { get; init; } = string.Empty;
     public bool? NameWasEdited { get; init; }
+    [EnumDataType(typeof(BoardGameKind))]
+    public BoardGameKind? BoardGameKind { get; init; }
+    [MaxLength(50)]
+    public IReadOnlyList<BoardGameReference>? BaseGames { get; init; }
     public bool? IsCompleteBox { get; init; }
+    public bool? IsCollection { get; init; }
+    [MaxLength(100)]
+    public IReadOnlyList<CollectionContent>? CollectionContents { get; init; }
     [MaxLength(1000)]
     public IReadOnlyList<OwnedSeason>? OwnedSeasons { get; init; }
 
@@ -29,6 +36,20 @@ public sealed class CreateCollectionItemRequest : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        if (MediaType is not (MediaType.Movie or MediaType.TvSeries) && (IsCollection == true || CollectionContents?.Count > 0))
+            yield return new ValidationResult("Collections support only movies and TV series.", [nameof(IsCollection)]);
+        if (CollectionContents?.Any(entry => entry is null || string.IsNullOrWhiteSpace(entry.Name)) == true)
+            yield return new ValidationResult("Each collection entry needs a name.", [nameof(CollectionContents)]);
+        if (IsCollection == false && CollectionContents?.Count > 0)
+            yield return new ValidationResult("Enable collection before adding contents.", [nameof(CollectionContents)]);
+        if (IsCollection == true && (IsCompleteBox == true || OwnedSeasons?.Count > 0))
+            yield return new ValidationResult("A collection uses one shared format instead of season-specific formats.", [nameof(OwnedSeasons)]);
+        if (MediaType != MediaType.BoardGame && (BoardGameKind is not null || BaseGames?.Count > 0))
+            yield return new ValidationResult("Board game classification is only available for board and card games.", [nameof(BoardGameKind)]);
+        if (BaseGames?.Any(game => game is null || (game.CollectionItemId is null && string.IsNullOrWhiteSpace(game.Name))) == true)
+            yield return new ValidationResult("Select or name each required game.", [nameof(BaseGames)]);
+        if (BoardGameKind is not null && BoardGameKind is not (Models.BoardGameKind.Expansion or Models.BoardGameKind.Other) && BaseGames?.Count > 0)
+            yield return new ValidationResult("Only expansions and other related items can have base games.", [nameof(BaseGames)]);
         if (MediaType != MediaType.TvSeries && (IsCompleteBox == true || OwnedSeasons?.Count > 0))
             yield return new ValidationResult("Season ownership is only available for TV series.", [nameof(OwnedSeasons)]);
         if (OwnedSeasons?.Any(season => season is null) == true)

@@ -82,13 +82,20 @@ export interface TmdbSeason {
 }
 
 export interface CollectionSourceMetadata {
-  source: 'TMDB' | 'IGDB'
+  source: 'TMDB' | 'IGDB' | 'BGG'
   sourceUrl?: string | null
   title: string
   originalTitle: string | null
   overview: string
   localizedOverviews?: Partial<Record<'fi' | 'en', string>> | null
   releaseDate: string | null
+  yearPublished?: number | null
+  minPlayers?: number | null
+  maxPlayers?: number | null
+  playingTime?: number | null
+  minAge?: number | null
+  isExpansion?: boolean | null
+  requiredGames?: import('./bgg').BggGameReference[]
   language: string | null
   platforms: string[]
   fetchedAt: string | null
@@ -103,11 +110,15 @@ export interface CollectionItem {
   isNameCustom?: boolean
   localizedTitles?: Partial<Record<'fi' | 'en', string>> | null
   mediaType: number
+  boardGameKind?: number | null
+  baseGames?: BoardGameReference[]
   mediaFormat: number | null
   platform?: number | null
   store?: number | null
   isPhysical?: boolean | null
   isCompleteBox?: boolean
+  isCollection?: boolean
+  collectionContents?: CollectionContent[]
   ownedSeasons?: OwnedSeason[]
   info: string | null
   createdAt?: string | null
@@ -119,5 +130,39 @@ export interface CollectionItem {
   igdbMetadataId?: number | null
   igdbId?: number | null
   coverImageId?: string | null
+  bggMetadataId?: number | null
+  bggId?: number | null
+  bggImageUrl?: string | null
   sourceMetadata?: CollectionSourceMetadata | null
+}
+
+export interface CollectionContent {
+  name: string
+  tmdbId?: number | null
+  posterPath?: string | null
+}
+
+export interface BoardGameReference {
+  collectionItemId?: number | null
+  bggId?: number | null
+  name: string
+}
+
+export function boardGameKind(item: CollectionItem): number | undefined {
+  if (item.mediaType !== 4) return undefined
+  return (
+    item.boardGameKind ??
+    (item.sourceMetadata?.isExpansion === true
+      ? 2
+      : item.sourceMetadata?.isExpansion === false
+        ? 1
+        : !item.bggId && !item.sourceMetadata
+          ? 1
+          : undefined)
+  )
+}
+
+export function boardGameParents(item: CollectionItem): BoardGameReference[] {
+  if (boardGameKind(item) !== 2 && boardGameKind(item) !== 99) return []
+  return item.baseGames ?? item.sourceMetadata?.requiredGames ?? []
 }

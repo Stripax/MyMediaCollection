@@ -44,11 +44,9 @@
     "editItem": "Muokkaa kohdetta {name}",
     "delete": "Poista",
     "deleteItem": "Poista kohde {name}",
-    "deleteTitle": "Poista kokoelman kohde",
-    "deleteConfirmation": "Haluatko varmasti poistaa kohteen ”{name}”? Poistoa ei voi perua.",
     "cancel": "Peruuta",
     "deleting": "Poistetaan…",
-    "deleted": "Kohde poistettiin kokoelmasta.",
+    "deleted": "Kohde ”{name}” poistettiin kokoelmasta.",
     "deleteError": "Poistaminen epäonnistui. Yritä uudelleen.",
     "title": "Kokoelman kohteet",
     "loading": "Ladataan kokoelmaa…",
@@ -56,7 +54,44 @@
     "retry": "Yritä uudelleen",
     "empty": "Kokoelmassa ei ole vielä kohteita.",
     "emptyCategory": "Tässä kategoriassa ei ole vielä kohteita.",
-    "unknown": "Tuntematon kategoria"
+    "unknown": "Tuntematon kategoria",
+    "deleteTitles": {
+      "all": "Poista kokoelman kohde",
+      "movies": "Poista elokuva",
+      "tvSeries": "Poista TV-sarja",
+      "videoGames": "Poista videopeli",
+      "boardGames": "Poista lauta- tai korttipeli"
+    },
+    "deleteConfirmations": {
+      "all": "Haluatko varmasti poistaa ”{name}”? Poistoa ei voi perua.",
+      "movies": "Haluatko varmasti poistaa ”{name}” elokuvista? Poistoa ei voi perua.",
+      "tvSeries": "Haluatko varmasti poistaa ”{name}” TV-sarjoista? Poistoa ei voi perua.",
+      "videoGames": "Haluatko varmasti poistaa ”{name}” videopeleistä? Poistoa ei voi perua.",
+      "boardGames": "Haluatko varmasti poistaa ”{name}” lauta- ja korttipeleistä? Poistoa ei voi perua."
+    },
+    "notifications": {
+      "saved": {
+        "all": "”{name}” lisättiin kokoelmaan.",
+        "movies": "Elokuva ”{name}” lisättiin kokoelmaan.",
+        "tvSeries": "TV-sarja ”{name}” lisättiin kokoelmaan.",
+        "videoGames": "Videopeli ”{name}” lisättiin kokoelmaan.",
+        "boardGames": "Lauta- tai korttipeli ”{name}” lisättiin kokoelmaan."
+      },
+      "updated": {
+        "all": "”{name}” muutokset tallennettiin.",
+        "movies": "Elokuvan ”{name}” muutokset tallennettiin.",
+        "tvSeries": "TV-sarjan ”{name}” muutokset tallennettiin.",
+        "videoGames": "Videopelin ”{name}” muutokset tallennettiin.",
+        "boardGames": "Lauta- tai korttipelin ”{name}” muutokset tallennettiin."
+      },
+      "deleted": {
+        "all": "”{name}” poistettiin kokoelmasta.",
+        "movies": "Elokuva ”{name}” poistettiin kokoelmasta.",
+        "tvSeries": "TV-sarja ”{name}” poistettiin kokoelmasta.",
+        "videoGames": "Videopeli ”{name}” poistettiin kokoelmasta.",
+        "boardGames": "Lauta- tai korttipeli ”{name}” poistettiin kokoelmasta."
+      }
+    }
   },
   "itemForm": {
     "gameType": "Pelityyppi",
@@ -70,7 +105,7 @@
     "platformRequired": "Valitse pelille alusta.",
     "editTitle": "Muokkaa kokoelman kohdetta",
     "editDescription": "Muokkaa kohteen tietoja ja tallenna muutokset.",
-    "updated": "Kohteen muutokset tallennettiin.",
+    "updated": "Kohteen ”{name}” muutokset tallennettiin.",
     "notFound": "Kohdetta ei enää löydy. Sulje ikkuna ja päivitä kokoelma.",
     "chooseFormat": "Valitse median tyyppi",
     "title": "Kokoelman kohde",
@@ -78,7 +113,7 @@
     "add": "Lisää",
     "saveChanges": "Tallenna muutokset",
     "saving": "Tallennetaan…",
-    "saved": "Kohde tallennettiin kokoelmaan.",
+    "saved": "Kohde ”{name}” lisättiin kokoelmaan.",
     "nameRequired": "Anna kohteelle nimi.",
     "validationError": "Tarkista nimi, kategoria, formaatti tai alusta sekä PC-pelin kauppa. Lisätietojen enimmäispituus on 10 000 merkkiä.",
     "saveError": "Tallennus epäonnistui. Tarkista yhteys ja yritä uudelleen.",
@@ -92,8 +127,8 @@
   },
   "sidebar": {
     "categories": "Kategoriat",
-    "hide": "Piilota sivupalkki",
-    "show": "Avaa sivupalkki",
+    "hide": "Piilota kategoriat",
+    "show": "Näytä kategoriat",
     "all": "Kaikki",
     "movies": "Elokuvat",
     "tvSeries": "TV-sarjat",
@@ -106,7 +141,13 @@
     "themes": "Teemat",
     "languages": "Kielet",
     "lightMode": "Vaalea tila",
-    "blackMode": "Musta tila"
+    "blackMode": "Musta tila",
+    "matrixRain": "Koodisade",
+    "matrixRainSettings": "Koodisateen asetukset",
+    "matrixRainSpeed": "Nopeus",
+    "matrixRainBrightness": "Kirkkaus",
+    "matrixRainReset": "Palauta oletukset",
+    "matrixRainDensity": "Tekstin määrä"
   },
   "settings": "Sovelluksen asetukset",
   "language": "Kieli",
@@ -116,6 +157,7 @@
   "header": "Tervetuloa sovellukseen \"Minun Kokoelmani\".",
   "description": "Tämä on sovellus, jonka avulla voit hallita ja listata kokoelmasi helposti.\nSovelluksen tarkoitus on toimia apurina kokoelman hallinnassa ja tarjota käyttäjälle selkeä näkymä kokoelmaan liittyvistä tiedoista.\nSovellus on harjoitusprojekti, joka on toteutettu Vue 3 -kehitysympäristössä ja hyödyntää Composition API:ta.\nKäyttäjä voi lisätä, muokata ja poistaa kohteita kokoelmastaan sekä selata niitä eri näkymissä.\nSovellus tukee useita kieliä ja tarjoaa mahdollisuuden vaihtaa kieltä käyttöliittymässä.\nLisäksi sovellus sisältää tumman tilan, joka voidaan aktivoida käyttäjän mieltymyksen mukaan.\n\nSovelluksen luonnissa on käytetty ChatGPT tekoälyä.",
   "tmdb": {
+    "attribution": "Elokuva- ja TV-sarjatiedot sekä kansikuvat: The Movie Database (TMDB)",
     "add": "Lisää TMDB-haulla",
     "title": "Lisää elokuva tai TV-sarja TMDB-haulla",
     "description": "Hae nimellä, valitse oikea teos ja täydennä oman kappaleesi tiedot. Voit edelleen käyttää myös manuaalista lisäyslomaketta.",
@@ -186,7 +228,8 @@
     "unknown": "Ei tiedossa",
     "noOverview": "Yhteenvetoa ei ole saatavilla.",
     "finnish": "Suomi",
-    "english": "Englanti"
+    "english": "Englanti",
+    "openBgg": "Avaa BGG:ssä"
   },
   "tvOwnership": {
     "title": "Omistetut kaudet",
@@ -203,5 +246,57 @@
     "episodeCount": "Jaksojen määrä",
     "loading": "Haetaan sarjan kausitietoja…",
     "defaultFormat": "Oletusformaatti"
+  },
+  "bgg": {
+    "add": "Lisää BGG-haulla",
+    "title": "Lisää lauta- tai korttipeli BGG-haulla",
+    "description": "Hae peliä nimellä, valitse oikea kohde ja täytä oman kappaleesi pelityyppi ja lisätiedot. BGG:n kuvaukset ovat yleensä englanniksi. Voit edelleen lisätä kohteen myös käsin.",
+    "searchLabel": "Lauta- tai korttipelin nimi",
+    "searchPlaceholder": "Kirjoita pelin nimi…",
+    "search": "Hae BGG:stä",
+    "searching": "Haetaan…",
+    "results": "Hakutulokset",
+    "select": "Valitse",
+    "noResults": "Pelejä ei löytynyt. Kokeile toista nimeä tai lisää peli käsin.",
+    "noPoster": "Ei kansikuvaa",
+    "noOverview": "Pelille ei ole yhteenvetoa saatavilla.",
+    "viewSource": "Näytä BoardGameGeekissä",
+    "changeSelection": "Valitse toinen peli",
+    "pages": "Hakutulossivut",
+    "previous": "Edellinen",
+    "next": "Seuraava",
+    "page": "Sivu {page}",
+    "credits": "Tietolähde ja tekijätiedot",
+    "notConfigured": "BGG-hakua ei ole vielä määritetty. Voit lisätä pelin käsin.",
+    "credentialsError": "BGG-tunnistautuminen epäonnistui. Tarkista backendin API-avain.",
+    "rateLimited": "BGG on ruuhkautunut tai hakuraja ylittyi. Odota hetki ja yritä uudelleen.",
+    "notFound": "Valittua peliä ei enää löydy BGG:stä. Tee haku uudelleen.",
+    "requestError": "BGG-haku epäonnistui. Yritä uudelleen tai lisää peli käsin.",
+    "pending": "BGG valmistelee vielä tietoja. Odota hetki ja yritä uudelleen.",
+    "loadingDetails": "Haetaan pelin tietoja…",
+    "players": "Pelaajamäärä",
+    "playingTime": "Peliaika",
+    "minutes": "{count} min",
+    "minAge": "Ikäsuositus",
+    "attribution": "Powered by BGG · Pelitiedot ja kansikuvat: BoardGameGeek",
+    "classification": "Peruspeli / lisäosa",
+    "baseGame": "Peruspeli",
+    "expansion": "Lisäosa",
+    "requiredGames": "Vaatii pelit",
+    "requiredGamesUnknown": "BGG ei ilmoita vaadittuja pelejä.",
+    "enterBaseGameManually": "Kirjoita peruspelin nimi",
+    "baseGameName": "Peruspelin nimi",
+    "addBaseGame": "Lisää vaadittu peli",
+    "removeBaseGame": "Poista peruspelivalinta"
+  },
+  "mediaCollection": {
+    "label": "Kokoelma",
+    "sharedFormat": "Kaikki kokoelman kohteet käyttävät samaa formaattia. Ensimmäisen TMDB-kohteen kuva toimii kansikuvana.",
+    "entryName": "Kohteen {number} nimi",
+    "remove": "Poista kokoelmasta",
+    "addEntry": "Lisää kokoelmaan kohde",
+    "contentsRequired": "Lisää kokoelmaan vähintään yksi nimetty kohde.",
+    "searchHint": "Hae ja valitse kokoelmaan kuuluvat elokuvat tai sarjat yksi kerrallaan. Kirjoita kokoelman oma nimi alla olevaan Nimi-kenttään.",
+    "tooMany": "Kokoelmassa voi olla enintään 100 kohdetta."
   }
 }

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Dialog } from '@ark-ui/vue/dialog'
 import '../style/collection-item-dialog.css'
+import '../style/media-collection.css'
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   type CollectionCategory,
   mediaFormats,
+  boardGameFormats,
   otherOption,
   gamePlatforms,
   gameStores,
@@ -18,7 +20,11 @@ import IgdbAttribution from './IgdbAttribution.vue'
 import TvSeasonOwnership from './TvSeasonOwnership.vue'
 import type { OwnedSeason } from '../models/collection'
 import { igdbCoverUrl, type IgdbResult } from '../models/igdb'
-type CatalogResult = TmdbResult | IgdbResult
+import { bggImageUrl, type BggResult } from '../models/bgg'
+import BggAttribution from './BggAttribution.vue'
+import { itemNoticeKey } from '../models/itemNotices'
+import BggExpansionDetails from './BggExpansionDetails.vue'
+type CatalogResult = TmdbResult | IgdbResult | BggResult
 type CatalogSearchPage = {
   page: number
   totalPages?: number
@@ -27,10 +33,11 @@ type CatalogSearchPage = {
 }
 
 const props = withDefaults(
-  defineProps<{ category: CollectionCategory; source?: 'tmdb' | 'igdb' }>(),
+  defineProps<{ category: CollectionCategory; source?: 'tmdb' | 'igdb' | 'bgg' }>(),
   { source: 'tmdb' },
 )
 const isIgdb = computed(() => props.source === 'igdb')
+const isBgg = computed(() => props.source === 'bgg')
 const emit = defineEmits<{ saved: [] }>()
 const importFormId = useId()
 const { t, locale } = useI18n({ useScope: 'global' })
@@ -38,12 +45,17 @@ function ct(key: string, params: Record<string, string | number> = {}) {
   return t(`${props.source}.${key}`, params)
 }
 function resultId(result: CatalogResult) {
-  return 'igdbId' in result ? result.igdbId : result.tmdbId
+  return 'bggId' in result ? result.bggId : 'igdbId' in result ? result.igdbId : result.tmdbId
 }
 function coverUrl(result: CatalogResult) {
-  return 'igdbId' in result ? igdbCoverUrl(result.coverImageId) : posterUrl(result.posterPath)
+  return 'bggId' in result
+    ? bggImageUrl(result.imageUrl)
+    : 'igdbId' in result
+      ? igdbCoverUrl(result.coverImageId)
+      : posterUrl(result.posterPath)
 }
 function sourceUrl(result: CatalogResult) {
+  if ('bggId' in result) return `https://boardgamegeek.com/boardgame/${result.bggId}`
   return 'igdbId' in result
     ? result.sourceUrl?.startsWith('https://www.igdb.com/games/')
       ? result.sourceUrl
@@ -57,11 +69,15 @@ const language = computed(() => (locale.value === 'fi' ? 'fi-FI' : 'en-US'))
 const query = ref('')
 const results = ref<CatalogResult[]>([])
 const selected = ref<CatalogResult | null>(null)
+const isCollection = ref(false)
+const collectionSelections = ref<TmdbResult[]>([])
 const searched = ref(false)
 const searching = ref(false)
 const saving = ref(false)
 const transitioning = ref(false)
 const pendingSave = ref(false)
+let savedName = ''
+let savedMediaType = 1
 const page = ref(1)
 const totalPages = ref(0)
 const hasNextPage = ref(false)
@@ -86,7 +102,7 @@ function clearSearch() {
   searching.value = false
   searched.value = false
   results.value = []
-  selected.value = null
+  selected.value = isCollection.value ? (collectionSelections.value[0] ?? null) : null
   page.value = 1
   totalPages.value = 0
   hasNextPage.value = false
@@ -95,17 +111,30 @@ function clearSearch() {
 }
 
 function prepare() {
+  isCollection.value = false
+  collectionSelections.value = []
+  name.value = ''
   clearSearch()
-  mediaType.value = isIgdb.value ? 3 : props.category === 'tvSeries' ? 2 : 1
+  mediaType.value = isBgg.value ? 4 : isIgdb.value ? 3 : props.category === 'tvSeries' ? 2 : 1
   platform.value = ''
   store.value = ''
   isPhysical.value = false
   query.value = ''
-  format.value = 1
+  format.value = isBgg.value ? 4 : 1
   info.value = ''
 }
 
 watch([mediaType, language, query], clearSearch)
+watch(mediaType, () => {
+  collectionSelections.value = []
+  selected.value = null
+  name.value = ''
+})
+watch(isCollection, () => {
+  collectionSelections.value = []
+  selected.value = null
+  name.value = ''
+})
 watch(open, (value) => {
   if (!value) {
     request?.abort()
@@ -123,6 +152,11 @@ function reportError(key: string) {
 async function responseError(response: Response) {
   const problem = await response.json().catch(() => ({}))
   const errors: Record<string, string> = {
+    bgg_not_configured: 'bgg.notConfigured',
+    bgg_credentials: 'bgg.credentialsError',
+    bgg_rate_limited: 'bgg.rateLimited',
+    bgg_not_found: 'bgg.notFound',
+    bgg_pending: 'bgg.pending',
     igdb_not_configured: 'igdb.notConfigured',
     igdb_credentials: 'igdb.credentialsError',
     igdb_rate_limited: 'igdb.rateLimited',
@@ -145,7 +179,7 @@ async function search(targetPage = 1) {
   const controller = new AbortController()
   request = controller
   searching.value = true
-  selected.value = null
+  selected.value = isCollection.value ? (collectionSelections.value[0] ?? null) : null
   results.value = []
   searched.value = false
   dismissMessage(error.value)
@@ -153,7 +187,9 @@ async function search(targetPage = 1) {
   try {
     const parameters = new URLSearchParams({
       query: query.value.trim(),
-      ...(!isIgdb.value ? { mediaType: String(mediaType.value), language: language.value } : {}),
+      ...(props.source === 'tmdb'
+        ? { mediaType: String(mediaType.value), language: language.value }
+        : {}),
       page: String(targetPage),
     })
     const response = await fetch(`/api/${props.source}/search?${parameters}`, {
@@ -179,37 +215,58 @@ async function search(targetPage = 1) {
 }
 
 async function select(result: CatalogResult) {
+  if (isCollection.value && 'tmdbId' in result) {
+    if (collectionSelections.value.some((entry) => entry.tmdbId === result.tmdbId)) return
+    if (collectionSelections.value.length >= 100) {
+      reportError('mediaCollection.tooMany')
+      return
+    }
+    collectionSelections.value = [...collectionSelections.value, result]
+    selected.value = collectionSelections.value[0] ?? null
+    return
+  }
   selected.value = result
   name.value = result.title
   suggestedName.value = result.title
   info.value = ''
   isCompleteBox.value = false
   ownedSeasons.value = []
-  if (isIgdb.value || mediaType.value !== 2 || !('tmdbId' in result)) return
+  if (!('bggId' in result) && (mediaType.value !== 2 || !('tmdbId' in result))) return
   request?.abort()
   const controller = new AbortController()
   request = controller
   const version = ++searchVersion
   loadingDetails.value = true
   try {
-    const parameters = new URLSearchParams({
-      tmdbId: String(result.tmdbId),
-      mediaType: '2',
-      language: language.value,
+    const parameters = new URLSearchParams(
+      'bggId' in result
+        ? { bggId: String(result.bggId) }
+        : {
+            tmdbId: String(result.tmdbId),
+            mediaType: '2',
+            language: language.value,
+          },
+    )
+    const response = await fetch(`/api/${props.source}/details?${parameters}`, {
+      signal: controller.signal,
     })
-    const response = await fetch(`/api/tmdb/details?${parameters}`, { signal: controller.signal })
     if (version !== searchVersion || !selected.value) return
     if (!response.ok) {
       await responseError(response)
       return
     }
-    const details: TmdbResult = await response.json()
+    const details: TmdbResult | BggResult = await response.json()
     if (version === searchVersion && selected.value) selected.value = details
   } catch {
-    if (!controller.signal.aborted) reportError('tmdb.requestError')
+    if (!controller.signal.aborted) reportError(`${props.source}.requestError`)
   } finally {
     if (version === searchVersion) loadingDetails.value = false
   }
+}
+
+function removeCollectionEntry(index: number) {
+  collectionSelections.value = collectionSelections.value.filter((_, current) => current !== index)
+  selected.value = collectionSelections.value[0] ?? null
 }
 
 async function save() {
@@ -227,6 +284,8 @@ async function save() {
     return
   }
   saving.value = true
+  const requestedName = name.value.trim()
+  const requestedMediaType = mediaType.value
   dismissMessage(error.value)
   error.value = ''
   try {
@@ -234,15 +293,21 @@ async function save() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ...('igdbId' in selected.value
-          ? { igdbId: selected.value.igdbId }
-          : {
-              tmdbId: selected.value.tmdbId,
-              language: selected.value.language,
-              useLocalizedName: name.value.trim() === suggestedName.value.trim(),
-            }),
+        ...('bggId' in selected.value
+          ? { bggId: selected.value.bggId }
+          : 'igdbId' in selected.value
+            ? { igdbId: selected.value.igdbId }
+            : {
+                tmdbId: selected.value.tmdbId,
+                language: selected.value.language,
+                useLocalizedName:
+                  !isCollection.value && name.value.trim() === suggestedName.value.trim(),
+                ...(isCollection.value
+                  ? { tmdbIds: collectionSelections.value.map((entry) => entry.tmdbId) }
+                  : {}),
+              }),
         item: {
-          name: name.value.trim(),
+          name: requestedName,
           mediaType: mediaType.value,
           mediaFormat: isIgdb.value ? null : format.value,
           ...(isIgdb.value
@@ -252,8 +317,9 @@ async function save() {
               }
             : {}),
           info: info.value,
+          ...(isCollection.value && props.source === 'tmdb' ? { isCollection: true } : {}),
           ...(isIgdb.value ? { isPhysical: isPhysical.value } : {}),
-          ...(mediaType.value === 2
+          ...(mediaType.value === 2 && !isCollection.value
             ? { isCompleteBox: isCompleteBox.value, ownedSeasons: ownedSeasons.value }
             : {}),
         },
@@ -263,6 +329,8 @@ async function save() {
       await responseError(response)
       return
     }
+    savedName = requestedName
+    savedMediaType = requestedMediaType
     pendingSave.value = true
     open.value = false
   } catch {
@@ -276,7 +344,7 @@ function finishClose() {
   transitioning.value = false
   if (!pendingSave.value) return
   pendingSave.value = false
-  show('itemForm.saved', 'success')
+  show(itemNoticeKey('saved', savedMediaType), 'success', { name: savedName })
   emit('saved')
 }
 </script>
@@ -291,7 +359,7 @@ function finishClose() {
   >
     <Dialog.Trigger
       class="positive-button"
-      :class="isIgdb ? 'igdb-add-button' : 'tmdb-add-button'"
+      :class="`${source}-add-button`"
       :disabled="pendingSave || transitioning"
       @click="prepare"
       >{{ ct('add') }}</Dialog.Trigger
@@ -320,7 +388,7 @@ function finishClose() {
                 @submit.prevent="search()"
               >
                 <fieldset class="item-form-fields" :disabled="saving || loadingDetails">
-                  <label v-if="!isIgdb && category === 'all'" class="item-form-field">
+                  <label v-if="source === 'tmdb' && category === 'all'" class="item-form-field">
                     <span>{{ t('itemForm.category') }}</span>
                     <select v-model.number="mediaType" name="TmdbMediaType">
                       <option :value="1">{{ t('sidebar.movies') }}</option>
@@ -328,11 +396,16 @@ function finishClose() {
                     </select>
                   </label>
                   <p v-else class="tmdb-category">{{ t(`sidebar.${category}`) }}</p>
+                  <label v-if="source === 'tmdb'" class="item-form-checkbox">
+                    <input v-model="isCollection" name="IsCollection" type="checkbox" />
+                    <span>{{ t('mediaCollection.label') }}</span>
+                  </label>
+                  <p v-if="isCollection">{{ t('mediaCollection.searchHint') }}</p>
                   <label class="item-form-field"
                     ><span>{{ ct('searchLabel') }}</span
                     ><input
                       v-model="query"
-                      :name="isIgdb ? 'IgdbQuery' : 'TmdbQuery'"
+                      :name="isBgg ? 'BggQuery' : isIgdb ? 'IgdbQuery' : 'TmdbQuery'"
                       type="search"
                       required
                       maxlength="200"
@@ -349,7 +422,7 @@ function finishClose() {
               </form>
               <p v-if="searched && !results.length" role="status">{{ ct('noResults') }}</p>
               <ul
-                v-if="results.length && !selected"
+                v-if="results.length && (!selected || isCollection)"
                 class="tmdb-results"
                 :aria-label="ct('results')"
               >
@@ -373,6 +446,10 @@ function finishClose() {
                         result.releaseDate.slice(0, 4)
                       }}</span
                       ><span
+                        v-if="'yearPublished' in result && result.yearPublished"
+                        class="tmdb-result-year"
+                        >{{ result.yearPublished }}</span
+                      ><span
                         v-if="'originalTitle' in result && result.originalTitle !== result.title"
                         class="tmdb-original-title"
                         >{{ result.originalTitle }}</span
@@ -383,7 +460,11 @@ function finishClose() {
                 </li>
               </ul>
               <nav
-                v-if="(totalPages > 1 || hasNextPage || page > 1) && !selected && !searching"
+                v-if="
+                  (totalPages > 1 || hasNextPage || page > 1) &&
+                  (!selected || isCollection) &&
+                  !searching
+                "
                 class="tmdb-pagination"
                 :aria-label="ct('pages')"
               >
@@ -391,11 +472,11 @@ function finishClose() {
                   {{ ct('previous') }}
                 </button>
                 <span>{{
-                  isIgdb ? ct('page', { page }) : ct('page', { page, total: totalPages })
+                  isIgdb || isBgg ? ct('page', { page }) : ct('page', { page, total: totalPages })
                 }}</span>
                 <button
                   type="button"
-                  :disabled="(isIgdb ? !hasNextPage : page >= totalPages) || saving"
+                  :disabled="(isIgdb || isBgg ? !hasNextPage : page >= totalPages) || saving"
                   @click="search(page + 1)"
                 >
                   {{ ct('next') }}
@@ -421,7 +502,26 @@ function finishClose() {
                     <div>
                       <strong>{{ selected.title }}</strong>
                       <p v-if="selected.releaseDate">{{ selected.releaseDate }}</p>
+                      <p v-if="'yearPublished' in selected && selected.yearPublished">
+                        {{ selected.yearPublished }}
+                      </p>
                       <p>{{ selected.overview || ct('noOverview') }}</p>
+                      <template v-if="'bggId' in selected && !loadingDetails">
+                        <BggExpansionDetails
+                          :is-expansion="selected.isExpansion"
+                          :required-games="selected.requiredGames"
+                        />
+                        <p v-if="selected.minPlayers || selected.maxPlayers">
+                          {{ ct('players') }}: {{ selected.minPlayers ?? '–' }}–{{
+                            selected.maxPlayers ?? '–'
+                          }}
+                        </p>
+                        <p v-if="selected.playingTime">
+                          {{ ct('playingTime') }}:
+                          {{ ct('minutes', { count: selected.playingTime }) }}
+                        </p>
+                        <p v-if="selected.minAge">{{ ct('minAge') }}: {{ selected.minAge }}+</p>
+                      </template>
                       <a
                         v-if="sourceUrl(selected)"
                         :href="sourceUrl(selected)!"
@@ -431,7 +531,16 @@ function finishClose() {
                       >
                     </div>
                   </div>
-                  <button type="button" @click="selected = null">
+                  <ol v-if="isCollection" class="media-collection-selection">
+                    <li v-for="(entry, index) in collectionSelections" :key="entry.tmdbId">
+                      {{ entry.title }}
+                      <button type="button" @click="removeCollectionEntry(index)">
+                        {{ t('mediaCollection.remove') }}
+                      </button>
+                    </li>
+                  </ol>
+                  <p v-if="isCollection">{{ t('mediaCollection.sharedFormat') }}</p>
+                  <button v-if="!isCollection" type="button" @click="selected = null">
                     {{ ct('changeSelection') }}
                   </button>
                   <label class="item-form-field"
@@ -442,11 +551,17 @@ function finishClose() {
                     ><span>{{ t('itemForm.mediaFormat') }}</span
                     ><select v-model.number="format" name="MediaFormat">
                       <option
-                        v-for="option in mediaFormats"
+                        v-for="option in isBgg ? boardGameFormats : mediaFormats"
                         :key="option.value"
                         :value="option.value"
                       >
-                        {{ option.value === otherOption ? t('common.other') : option.label }}
+                        {{
+                          isBgg
+                            ? t(option.label)
+                            : option.value === otherOption
+                              ? t('common.other')
+                              : option.label
+                        }}
                       </option>
                     </select></label
                   >
@@ -497,9 +612,17 @@ function finishClose() {
                       <span>{{ t('itemForm.isPhysical') }}</span>
                     </label>
                   </template>
-                  <p v-if="loadingDetails" role="status">{{ t('tvOwnership.loading') }}</p>
+                  <p v-if="loadingDetails" role="status">
+                    {{ isBgg ? ct('loadingDetails') : t('tvOwnership.loading') }}
+                  </p>
                   <TvSeasonOwnership
-                    v-if="!isIgdb && mediaType === 2 && 'tmdbId' in selected && !loadingDetails"
+                    v-if="
+                      !isIgdb &&
+                      !isCollection &&
+                      mediaType === 2 &&
+                      'tmdbId' in selected &&
+                      !loadingDetails
+                    "
                     :key="selected.tmdbId"
                     v-model:complete-box="isCompleteBox"
                     v-model:owned-seasons="ownedSeasons"
@@ -531,7 +654,9 @@ function finishClose() {
                   {{ t(saving ? 'itemForm.saving' : 'itemForm.add') }}
                 </button>
               </div>
-              <IgdbAttribution v-if="isIgdb" /><TmdbAttribution v-else />
+              <BggAttribution v-if="isBgg" /><IgdbAttribution v-else-if="isIgdb" /><TmdbAttribution
+                v-else
+              />
             </Dialog.Content>
           </Dialog.Positioner>
         </div>

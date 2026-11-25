@@ -1,0 +1,4 @@
+BEGIN TRANSACTION;
+ALTER TABLE "BggMetadata" ADD COLUMN "IsExpansion" INTEGER CHECK ("IsExpansion" IN (0, 1));
+ALTER TABLE "BggMetadata" ADD COLUMN "RequiredGamesJson" TEXT NOT NULL DEFAULT '[]';
+COMMIT;

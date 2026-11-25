@@ -8,14 +8,14 @@ import fi from '../../lang/fi.json'
 
 let wrapper: VueWrapper | undefined
 
-async function openConfirmation() {
+async function openConfirmation(locale = 'fi') {
   wrapper = mount(DeleteCollectionItemDialog, {
     attachTo: document.body,
     props: {
       item: { id: 19, name: 'Poistettava kohde', mediaType: 1, mediaFormat: 2, info: null },
     },
     global: {
-      plugins: [createI18n({ legacy: false, locale: 'fi', messages: { en, fi } })],
+      plugins: [createI18n({ legacy: false, locale, messages: { en, fi } })],
       stubs: { transition: false },
     },
   })
@@ -32,6 +32,69 @@ afterEach(() => {
 })
 
 describe('Delete confirmation', () => {
+  it.each([
+    ['fi', 1, 'movies'],
+    ['en', 1, 'movies'],
+    ['fi', 2, 'tvSeries'],
+    ['en', 2, 'tvSeries'],
+    ['fi', 3, 'videoGames'],
+    ['en', 3, 'videoGames'],
+    ['fi', 4, 'boardGames'],
+    ['en', 4, 'boardGames'],
+  ] as const)(
+    'shows category-specific confirmation in %s for %s',
+    async (locale, mediaType, category) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+      const dialog = await openConfirmation(locale)
+      await wrapper!.setProps({
+        item: {
+          id: 19,
+          name: 'Example title',
+          mediaType,
+          mediaFormat: mediaType === 4 ? 4 : 2,
+          info: null,
+        },
+      })
+      const labels = locale === 'fi' ? fi : en
+      expect(dialog.get('.item-dialog-title').text()).toBe(labels.collection.deleteTitles[category])
+      expect(dialog.get('.item-dialog-description').text()).toBe(
+        labels.collection.deleteConfirmations[category].replace('{name}', 'Example title'),
+      )
+      await dialog.get('.collection-delete-confirm').trigger('click')
+      await vi.waitFor(() =>
+        expect(useSnackbar().notice.value).toMatchObject({
+          messageKey: `collection.notifications.deleted.${category}`,
+          params: { name: 'Example title' },
+        }),
+      )
+    },
+  )
+  it.each(['fi', 'en'])(
+    'uses the displayed item name in the deletion notice in %s',
+    async (locale) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+      const dialog = await openConfirmation(locale)
+      await wrapper!.setProps({
+        item: {
+          id: 19,
+          name: 'Tappajahai',
+          mediaType: 1,
+          mediaFormat: 2,
+          info: null,
+          tmdbId: 578,
+          isNameCustom: false,
+          localizedTitles: { fi: 'Tappajahai', en: 'Jaws' },
+        },
+      })
+      await dialog.get('.collection-delete-confirm').trigger('click')
+      await vi.waitFor(() =>
+        expect(useSnackbar().notice.value).toMatchObject({
+          messageKey: 'collection.notifications.deleted.movies',
+          params: { name: locale === 'fi' ? 'Tappajahai' : 'Jaws' },
+        }),
+      )
+    },
+  )
   it.each([404, 503, 'network'])(
     'keeps the item after a %s error and permits retry',
     async (failure) => {

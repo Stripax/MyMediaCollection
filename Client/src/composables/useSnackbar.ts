@@ -1,7 +1,8 @@
-import { readonly, shallowRef } from 'vue'
+import { computed, readonly, shallowRef } from 'vue'
 
 export type SnackbarType = 'success' | 'error' | 'info'
 export const snackbarDuration = 5000
+export const snackbarVisibleLimit = 3
 
 interface SnackbarNotice {
   id: number
@@ -10,7 +11,8 @@ interface SnackbarNotice {
   params: Record<string, string | number>
 }
 
-const notice = shallowRef<SnackbarNotice | null>(null)
+const notices = shallowRef<SnackbarNotice[]>([])
+const notice = computed(() => notices.value[notices.value.length - 1] ?? null)
 let nextId = 0
 
 // Keep notifications interactive without dismissing an open Ark UI dialog.
@@ -25,16 +27,16 @@ export function useSnackbar() {
     type: SnackbarType = 'info',
     params: SnackbarNotice['params'] = {},
   ) {
-    notice.value = { id: ++nextId, messageKey, type, params }
+    notices.value = [...notices.value, { id: ++nextId, messageKey, type, params: { ...params } }]
   }
 
   function dismiss(id?: number) {
-    if (id === undefined || notice.value?.id === id) notice.value = null
+    notices.value = id === undefined ? [] : notices.value.filter((message) => message.id !== id)
   }
 
   function dismissMessage(messageKey: string) {
-    if (notice.value?.messageKey === messageKey) dismiss()
+    notices.value = notices.value.filter((message) => message.messageKey !== messageKey)
   }
 
-  return { notice: readonly(notice), show, dismiss, dismissMessage }
+  return { notice: readonly(notice), notices: readonly(notices), show, dismiss, dismissMessage }
 }

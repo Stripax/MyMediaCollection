@@ -1,21 +1,27 @@
 <script setup lang="ts">
 import { Dialog } from '@ark-ui/vue/dialog'
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { displayItemName } from '../models/itemNames'
+import { itemNoticeKey } from '../models/itemNotices'
 import ToolbarTooltip from './ToolbarTooltip.vue'
 import ToolbarIcon from './ToolbarIcon.vue'
 import { snackbarElements, useSnackbar } from '../composables/useSnackbar'
-import type { CollectionItem } from '../models/collection'
+import { mediaCategories, type CollectionItem } from '../models/collection'
 
 const props = defineProps<{ item: CollectionItem }>()
 const emit = defineEmits<{ deleted: [] }>()
 const { t, locale } = useI18n({ useScope: 'global' })
+const category = computed(
+  () => mediaCategories.find((category) => category.value === props.item.mediaType)?.id ?? 'all',
+)
 const open = ref(false)
 const deleting = ref(false)
 const error = ref('')
 const { show, dismissMessage } = useSnackbar()
 const pendingDelete = ref(false)
+let deletedName = ''
+let deletedMediaType = 1
 const transitioning = ref(false)
 const trigger = ref<{ $el: HTMLButtonElement } | null>(null)
 
@@ -24,13 +30,15 @@ function finishClose() {
   nextTick(() => trigger.value?.$el.focus())
   if (!pendingDelete.value) return
   pendingDelete.value = false
-  show('collection.deleted', 'success')
+  show(itemNoticeKey('deleted', deletedMediaType), 'success', { name: deletedName })
   emit('deleted')
 }
 
 async function remove() {
   if (deleting.value) return
   deleting.value = true
+  const requestedName = displayItemName(props.item, locale.value)
+  const requestedMediaType = props.item.mediaType
   dismissMessage(error.value)
   error.value = ''
   try {
@@ -40,6 +48,8 @@ async function remove() {
       show(error.value, 'error')
       return
     }
+    deletedName = requestedName
+    deletedMediaType = requestedMediaType
     pendingDelete.value = true
     open.value = false
   } catch {
@@ -91,10 +101,12 @@ async function remove() {
           <Dialog.Positioner class="item-dialog-positioner">
             <Dialog.Content class="item-dialog" :hidden="false" :aria-busy="deleting">
               <Dialog.Title class="item-dialog-title">{{
-                t('collection.deleteTitle')
+                t(`collection.deleteTitles.${category}`)
               }}</Dialog.Title>
               <Dialog.Description class="item-dialog-description">{{
-                t('collection.deleteConfirmation', { name: displayItemName(item, locale) })
+                t(`collection.deleteConfirmations.${category}`, {
+                  name: displayItemName(item, locale),
+                })
               }}</Dialog.Description>
               <p v-if="error" role="alert" class="item-form-error">{{ t(error) }}</p>
               <div class="item-dialog-actions">

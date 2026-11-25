@@ -12,6 +12,12 @@ public sealed record CollectionItem
     public GameStore? Store { get; init; }
     public bool? IsPhysical { get; init; }
     public bool IsCompleteBox { get; init; }
+    public bool IsCollection { get; init; }
+    public IReadOnlyList<CollectionContent> CollectionContents { get; init; } = [];
+    public BoardGameKind? BoardGameKind { get; init; }
+    public IReadOnlyList<BoardGameReference> BaseGames { get; init; } = [];
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? BaseGamesJson { get; init; }
     public IReadOnlyList<OwnedSeason> OwnedSeasons { get; init; } = [];
     public string? Info { get; init; }
     public DateTime? CreatedAt { get; init; }
@@ -23,5 +29,8 @@ public sealed record CollectionItem
     public long? IgdbMetadataId { get; init; }
     public long? IgdbId { get; init; }
     public string? CoverImageId { get; init; }
+    public long? BggMetadataId { get; init; }
+    public long? BggId { get; init; }
+    public string? BggImageUrl { get; init; }
     public CollectionSourceMetadata? SourceMetadata { get; init; }
 }

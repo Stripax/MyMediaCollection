@@ -1,4 +1,7 @@
 .snackbar-region {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   position: fixed;
   right: max(1rem, env(safe-area-inset-right));
   bottom: max(1rem, env(safe-area-inset-bottom));
@@ -111,9 +114,13 @@
     transform 180ms ease;
 }
 
+.snackbar-move {
+  transition: transform 180ms ease;
+}
+
 .snackbar-leave-active {
   position: absolute;
-  bottom: 0;
+  bottom: auto;
   width: 100%;
   pointer-events: none;
 }
@@ -125,6 +132,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .snackbar-move,
   .snackbar-enter-active,
   .snackbar-leave-active {
     transition: none;

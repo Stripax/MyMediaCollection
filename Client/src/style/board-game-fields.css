@@ -1,0 +1,15 @@
+.board-game-parents,
+.board-game-parent {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.board-game-parent {
+  padding: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.board-game-parent-remove {
+  justify-self: start;
+}

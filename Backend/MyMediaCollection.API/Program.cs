@@ -11,6 +11,13 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<TmdbTitleService>();
 builder.Services.AddScoped<IgdbSourceService>();
 builder.Services.AddSingleton<IgdbAccess>();
+builder.Services.AddSingleton<BggRequestGate>();
+builder.Services.AddScoped<BggExpansionService>();
+builder.Services.AddHttpClient<BggClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Bgg:BaseUrl"] ?? "https://boardgamegeek.com/xmlapi2/");
+    client.Timeout = TimeSpan.FromSeconds(20);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddHttpClient("IgdbOAuth", client => client.Timeout = TimeSpan.FromSeconds(10)).RemoveAllLoggers();
 builder.Services.AddHttpClient<IgdbClient>(client =>
 {

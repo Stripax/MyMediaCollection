@@ -60,7 +60,7 @@ describe('Vue table row transitions', () => {
     expect((originalRow as HTMLTableRowElement).inert).toBe(true)
     await vi.waitFor(() => expect(originalRow.isConnected).toBe(false))
     expect(table.findAll('tbody tr')).toHaveLength(1)
-    expect(table.get('tbody td').text()).toBe(added.name)
+    expect(table.get('tbody .collection-name-button').text()).toBe(added.name)
 
     const lastRow = table.get('tbody tr').element
     await table.setProps({ items: [] })

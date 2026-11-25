@@ -44,11 +44,9 @@
     "editItem": "Edit item {name}",
     "delete": "Delete",
     "deleteItem": "Delete item {name}",
-    "deleteTitle": "Delete collection item",
-    "deleteConfirmation": "Are you sure you want to delete “{name}”? This cannot be undone.",
     "cancel": "Cancel",
     "deleting": "Deleting…",
-    "deleted": "The item was deleted from your collection.",
+    "deleted": "“{name}” was deleted from your collection.",
     "deleteError": "Deleting failed. Please try again.",
     "title": "Collection items",
     "loading": "Loading collection…",
@@ -56,7 +54,44 @@
     "retry": "Try again",
     "empty": "There are no items in your collection yet.",
     "emptyCategory": "There are no items in this category yet.",
-    "unknown": "Unknown category"
+    "unknown": "Unknown category",
+    "deleteTitles": {
+      "all": "Delete collection item",
+      "movies": "Delete movie",
+      "tvSeries": "Delete TV series",
+      "videoGames": "Delete video game",
+      "boardGames": "Delete board or card game"
+    },
+    "deleteConfirmations": {
+      "all": "Are you sure you want to delete “{name}”? This cannot be undone.",
+      "movies": "Are you sure you want to delete “{name}” from Movies? This cannot be undone.",
+      "tvSeries": "Are you sure you want to delete “{name}” from TV series? This cannot be undone.",
+      "videoGames": "Are you sure you want to delete “{name}” from Video games? This cannot be undone.",
+      "boardGames": "Are you sure you want to delete “{name}” from Board and card games? This cannot be undone."
+    },
+    "notifications": {
+      "saved": {
+        "all": "“{name}” was added to your collection.",
+        "movies": "Movie “{name}” was added to your collection.",
+        "tvSeries": "TV series “{name}” was added to your collection.",
+        "videoGames": "Video game “{name}” was added to your collection.",
+        "boardGames": "Board or card game “{name}” was added to your collection."
+      },
+      "updated": {
+        "all": "Changes to “{name}” were saved.",
+        "movies": "Changes to movie “{name}” were saved.",
+        "tvSeries": "Changes to TV series “{name}” were saved.",
+        "videoGames": "Changes to video game “{name}” were saved.",
+        "boardGames": "Changes to board or card game “{name}” were saved."
+      },
+      "deleted": {
+        "all": "“{name}” was deleted from your collection.",
+        "movies": "Movie “{name}” was deleted from your collection.",
+        "tvSeries": "TV series “{name}” was deleted from your collection.",
+        "videoGames": "Video game “{name}” was deleted from your collection.",
+        "boardGames": "Board or card game “{name}” was deleted from your collection."
+      }
+    }
   },
   "itemForm": {
     "gameType": "Game type",
@@ -70,7 +105,7 @@
     "platformRequired": "Select a platform for the game.",
     "editTitle": "Edit collection item",
     "editDescription": "Edit the item details and save your changes.",
-    "updated": "Your changes were saved.",
+    "updated": "Changes to “{name}” were saved.",
     "notFound": "This item no longer exists. Close the dialog and reload the collection.",
     "chooseFormat": "Choose a media format",
     "title": "Collection item",
@@ -78,7 +113,7 @@
     "add": "Add",
     "saveChanges": "Save changes",
     "saving": "Saving…",
-    "saved": "The item was saved to your collection.",
+    "saved": "“{name}” was added to your collection.",
     "nameRequired": "Enter a name for the item.",
     "validationError": "Check the name, category, format or platform and the store for PC games. Additional information is limited to 10,000 characters.",
     "saveError": "Saving failed. Check your connection and try again.",
@@ -92,8 +127,8 @@
   },
   "sidebar": {
     "categories": "Categories",
-    "hide": "Hide sidebar",
-    "show": "Show sidebar",
+    "hide": "Hide categories",
+    "show": "Show categories",
     "all": "All",
     "movies": "Movies",
     "tvSeries": "TV series",
@@ -106,7 +141,13 @@
     "themes": "Themes",
     "languages": "Languages",
     "lightMode": "Light mode",
-    "blackMode": "Black mode"
+    "blackMode": "Black mode",
+    "matrixRain": "Code rain",
+    "matrixRainSettings": "Code rain settings",
+    "matrixRainSpeed": "Speed",
+    "matrixRainBrightness": "Brightness",
+    "matrixRainReset": "Restore defaults",
+    "matrixRainDensity": "Text amount"
   },
   "settings": "Application settings",
   "language": "Language",
@@ -116,6 +157,7 @@
   "header": "Welcome to the application \"My Collection\".",
   "description": "This application makes it easy to manage and list your collection.\nIt is designed to help you manage your collection and provide a clear overview of information about it.\nThe application is a practice project built with Vue 3 using the Composition API.\nYou can add, edit, and delete items in your collection and browse them in different views.\nThe application supports multiple languages and lets you change the language in the interface.\nIt also includes a dark mode that you can enable according to your preference.\n\nChatGPT AI was used to help create this application.",
   "tmdb": {
+    "attribution": "Movie and TV data and cover images: The Movie Database (TMDB)",
     "add": "Add with TMDB search",
     "title": "Add a movie or TV series with TMDB",
     "description": "Search by name, select the correct title and enter the details of your own copy. You can also keep using the manual form.",
@@ -186,7 +228,8 @@
     "unknown": "Unknown",
     "noOverview": "No overview is available.",
     "finnish": "Finnish",
-    "english": "English"
+    "english": "English",
+    "openBgg": "Open on BGG"
   },
   "tvOwnership": {
     "title": "Owned seasons",
@@ -203,5 +246,57 @@
     "episodeCount": "Number of episodes",
     "loading": "Loading season details…",
     "defaultFormat": "Default format"
+  },
+  "bgg": {
+    "add": "Add with BGG search",
+    "title": "Add a board or card game with BGG",
+    "description": "Search by game name, select the correct title and enter the type and details of your own copy. BGG descriptions are usually in English. Manual addition is still available.",
+    "searchLabel": "Board or card game name",
+    "searchPlaceholder": "Enter a game name…",
+    "search": "Search BGG",
+    "searching": "Searching…",
+    "results": "Search results",
+    "select": "Select",
+    "noResults": "No games found. Try another name or add the game manually.",
+    "noPoster": "No cover",
+    "noOverview": "No overview is available for this game.",
+    "viewSource": "View on BoardGameGeek",
+    "changeSelection": "Choose a different game",
+    "pages": "Search result pages",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}",
+    "credits": "Data source and credits",
+    "notConfigured": "BGG search has not been configured yet. You can add the game manually.",
+    "credentialsError": "BGG authentication failed. Check the API key in the backend settings.",
+    "rateLimited": "BGG is busy or the request limit was reached. Wait a moment and try again.",
+    "notFound": "The selected game is no longer available on BGG. Search again.",
+    "requestError": "The BGG request failed. Try again or add the game manually.",
+    "pending": "BGG is still preparing the data. Wait a moment and try again.",
+    "loadingDetails": "Loading game details…",
+    "players": "Players",
+    "playingTime": "Playing time",
+    "minutes": "{count} min",
+    "minAge": "Suggested age",
+    "attribution": "Powered by BGG · Game data and cover images: BoardGameGeek",
+    "classification": "Base game / expansion",
+    "baseGame": "Base game",
+    "expansion": "Expansion",
+    "requiredGames": "Required games",
+    "requiredGamesUnknown": "BGG does not list the required games.",
+    "enterBaseGameManually": "Enter a base game name",
+    "baseGameName": "Base game name",
+    "addBaseGame": "Add a required game",
+    "removeBaseGame": "Remove base game selection"
+  },
+  "mediaCollection": {
+    "label": "Collection",
+    "sharedFormat": "All titles in the collection share one format. The first TMDB title provides the cover image.",
+    "entryName": "Title {number}",
+    "remove": "Remove from collection",
+    "addEntry": "Add a title to the collection",
+    "contentsRequired": "Add at least one named title to the collection.",
+    "searchHint": "Search and select the included movies or series one at a time. Enter the name of your collection in the Name field below.",
+    "tooMany": "A collection can contain up to 100 titles."
   }
 }

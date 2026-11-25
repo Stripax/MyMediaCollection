@@ -47,6 +47,51 @@ afterEach(() => {
 })
 
 describe('TMDB import', () => {
+  it('keeps multiple TMDB selections across searches and uses the first cover for a box', async () => {
+    const second = {
+      ...movie,
+      tmdbId: 604,
+      title: 'The Matrix Reloaded',
+      posterPath: '/reloaded.jpg',
+    }
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [movie] }))
+      .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [second] }))
+      .mockResolvedValueOnce(json({ id: 77 }, 201))
+    vi.stubGlobal('fetch', request)
+    const dialog = await open('movies')
+    await dialog.get('input[name="IsCollection"]').setValue(true)
+    await dialog.get('input[name="TmdbQuery"]').setValue('Matrix')
+    await dialog.get('.tmdb-search-form').trigger('submit')
+    await flushPromises()
+    await dialog.get('.tmdb-result').trigger('click')
+    await dialog.get('input[name="Name"]').setValue('Matrix collection')
+    await dialog.get('input[name="TmdbQuery"]').setValue('Reloaded')
+    await dialog.get('.tmdb-search-form').trigger('submit')
+    await flushPromises()
+    await dialog.get('.tmdb-result').trigger('click')
+    await dialog.get('.tmdb-result').trigger('click')
+    expect(dialog.findAll('.media-collection-selection li')).toHaveLength(2)
+    expect(dialog.get('.tmdb-selected img').attributes('src')).toContain('/matrix.jpg')
+    await dialog.get('select[name="MediaFormat"]').setValue('2')
+    await dialog.get('.tmdb-import-form').trigger('submit')
+    await flushPromises()
+    expect(JSON.parse(request.mock.calls[2]![1].body)).toEqual({
+      tmdbId: 603,
+      tmdbIds: [603, 604],
+      language: 'fi-FI',
+      useLocalizedName: false,
+      item: {
+        name: 'Matrix collection',
+        mediaType: 1,
+        mediaFormat: 2,
+        info: '',
+        isCollection: true,
+      },
+    })
+  })
+
   it('searches, selects a movie and saves its own copy details with a TMDB reference', async () => {
     const request = vi
       .fn()
@@ -88,7 +133,8 @@ describe('TMDB import', () => {
       }),
     })
     await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
-    expect(useSnackbar().notice.value?.messageKey).toBe('itemForm.saved')
+    expect(useSnackbar().notice.value?.messageKey).toBe('collection.notifications.saved.movies')
+    expect(useSnackbar().notice.value?.params).toEqual({ name: 'The Matrix' })
   })
 
   it('supports TV selection, pagination and missing posters', async () => {

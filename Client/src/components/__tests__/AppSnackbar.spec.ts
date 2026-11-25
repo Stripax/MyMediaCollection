@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick, onBeforeUpdate, onUpdated, ref } from 'vue'
 import { createI18n } from 'vue-i18n'
 import AppSnackbar from '../AppSnackbar.vue'
 import { useSnackbar } from '../../composables/useSnackbar'
 import en from '../../lang/en.json'
 import fi from '../../lang/fi.json'
+import { itemNoticeKey } from '../../models/itemNotices'
 
 let wrapper: VueWrapper | undefined
 const snackbar = useSnackbar()
@@ -22,19 +23,86 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function mountSnackbar() {
+function mountSnackbar(realTransitions = false) {
   const i18n = createI18n({ legacy: false, locale: 'fi', messages: { en, fi } })
-  wrapper = mount(AppSnackbar, { attachTo: document.body, global: { plugins: [i18n] } })
+  wrapper = mount(AppSnackbar, {
+    attachTo: document.body,
+    global: {
+      plugins: [i18n],
+      stubs: {
+        'transition-group': realTransitions
+          ? false
+          : defineComponent({
+              inheritAttrs: false,
+              setup(_, { attrs, slots }) {
+                const root = ref<HTMLElement>()
+                let previous: Element[] = []
+                onBeforeUpdate(() => {
+                  previous = Array.from(root.value?.children ?? [])
+                })
+                onUpdated(() => {
+                  for (const element of previous) {
+                    if (!root.value?.contains(element))
+                      (attrs.onAfterLeave as ((element: Element) => void) | undefined)?.(element)
+                  }
+                })
+                return () => h('div', { ref: root }, slots.default?.())
+              },
+            }),
+      },
+    },
+  })
   return i18n
 }
 
 describe('App snackbar', () => {
+  it('reserves a closing card slot until the real Vue exit transition finishes', async () => {
+    vi.useRealTimers()
+    mountSnackbar(true)
+    for (const name of ['A', 'B', 'C', 'D'])
+      snackbar.show(itemNoticeKey('deleted', 1), 'success', { name })
+    await nextTick()
+    const bottom = Array.from(document.querySelectorAll<HTMLElement>('.snackbar')).find(
+      (card) => card.querySelector('strong')?.textContent === 'A',
+    )!
+    snackbar.dismiss(Number(bottom.dataset.snackbarId))
+    await nextTick()
+    expect(document.querySelectorAll('.snackbar').length).toBeLessThanOrEqual(3)
+    expect(document.querySelectorAll('.snackbar strong').length).toBeLessThanOrEqual(3)
+    await vi.waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll('.snackbar strong')).map(
+          (element) => element.textContent,
+        ),
+      ).toEqual(['D', 'C', 'B']),
+    )
+    expect(document.querySelectorAll('.snackbar')).toHaveLength(3)
+    expect(document.querySelectorAll('.snackbar-timer')).toHaveLength(1)
+  })
+  it.each(['saved', 'updated', 'deleted'] as const)(
+    'localizes category-specific %s messages while preserving the name',
+    async (action) => {
+      const i18n = mountSnackbar()
+      snackbar.show(itemNoticeKey(action, 2), 'success', { name: 'Example series' })
+      await nextTick()
+      expect(document.querySelector('.snackbar-message strong')?.textContent).toBe('Example series')
+      expect(document.querySelector('.snackbar')?.textContent).toContain(
+        fi.collection.notifications[action].tvSeries.replace('{name}', 'Example series'),
+      )
+      i18n.global.locale.value = 'en'
+      await nextTick()
+      expect(document.querySelector('.snackbar-message strong')?.textContent).toBe('Example series')
+      expect(document.querySelector('.snackbar')?.textContent).toContain(
+        en.collection.notifications[action].tvSeries.replace('{name}', 'Example series'),
+      )
+    },
+  )
   it('shows a green success notice with a top timer and dismisses it after five seconds', async () => {
     mountSnackbar()
-    snackbar.show('itemForm.saved', 'success')
+    snackbar.show('itemForm.saved', 'success', { name: 'Example game' })
     await nextTick()
     const notice = document.querySelector<HTMLElement>('.snackbar--success')!
-    expect(notice.textContent).toContain(fi.itemForm.saved)
+    expect(notice.textContent).toContain(fi.itemForm.saved.replace('{name}', 'Example game'))
     expect(notice.getAttribute('role')).toBe('status')
     expect(notice.querySelector<HTMLElement>('.snackbar-timer')!.style.animationDuration).toBe(
       '5000ms',
@@ -57,42 +125,137 @@ describe('App snackbar', () => {
     await nextTick()
     expect(snackbar.notice.value).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
-    snackbar.show('itemForm.updated', 'info')
+    snackbar.show('itemForm.updated', 'info', { name: 'Example game' })
     await nextTick()
     expect(document.querySelector('.snackbar--info')?.getAttribute('role')).toBe('status')
   })
 
-  it('replaces an old notice and starts a fresh five-second timer', async () => {
+  it('keeps the oldest notice at the bottom and starts the next timer only after it leaves', async () => {
     mountSnackbar()
-    snackbar.show('itemForm.saved', 'success')
+    snackbar.show('itemForm.saved', 'success', { name: 'Example game' })
     await nextTick()
-    const oldId = snackbar.notice.value!.id
     await vi.advanceTimersByTimeAsync(3000)
     snackbar.show('collection.deleteError', 'error')
     await nextTick()
-    snackbar.dismiss(oldId)
+    expect(document.querySelectorAll('.snackbar')).toHaveLength(2)
+    expect(document.querySelectorAll('.snackbar-timer')).toHaveLength(1)
+    expect(
+      document
+        .querySelector('.snackbar-timer')
+        ?.closest('.snackbar')
+        ?.classList.contains('snackbar--success'),
+    ).toBe(true)
     await vi.advanceTimersByTimeAsync(2000)
+    expect(document.querySelectorAll('.snackbar')).toHaveLength(1)
     expect(snackbar.notice.value?.messageKey).toBe('collection.deleteError')
-    await vi.advanceTimersByTimeAsync(2999)
+    await vi.advanceTimersByTimeAsync(4999)
     expect(snackbar.notice.value).not.toBeNull()
     await vi.advanceTimersByTimeAsync(1)
     expect(snackbar.notice.value).toBeNull()
   })
 
+  it('shows at most three cards with the newest on top and drains queued notices in arrival order', async () => {
+    mountSnackbar()
+    const names = () =>
+      Array.from(document.querySelectorAll('.snackbar strong')).map(
+        (element) => element.textContent,
+      )
+    for (const name of ['A', 'B', 'C', 'D', 'E'])
+      snackbar.show(itemNoticeKey('deleted', 1), 'success', { name })
+    await nextTick()
+    expect(names()).toEqual(['C', 'B', 'A'])
+    expect(snackbar.notices.value).toHaveLength(5)
+    expect(document.querySelectorAll('.snackbar-timer')).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(names()).toEqual(['D', 'C', 'B'])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(names()).toEqual(['E', 'D', 'C'])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(names()).toEqual(['E', 'D'])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(names()).toEqual(['E'])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(names()).toEqual([])
+    expect(snackbar.notices.value).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('fills an upper slot after X without resetting the bottom timer', async () => {
+    mountSnackbar()
+    for (const name of ['A', 'B', 'C', 'D'])
+      snackbar.show(itemNoticeKey('saved', 1), 'success', { name })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(2000)
+    const middle = Array.from(document.querySelectorAll('.snackbar')).find(
+      (card) => card.querySelector('strong')?.textContent === 'B',
+    )!
+    middle.querySelector<HTMLButtonElement>('button')!.click()
+    await nextTick()
+    expect(
+      Array.from(document.querySelectorAll('.snackbar strong')).map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(['D', 'C', 'A'])
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(
+      Array.from(document.querySelectorAll('.snackbar strong')).map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(['D', 'C'])
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(document.querySelectorAll('.snackbar')).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(document.querySelectorAll('.snackbar')).toHaveLength(1)
+    expect(document.querySelector('.snackbar strong')?.textContent).toBe('D')
+  })
+
+  it('starts a full timer for the next card after closing the bottom one early', async () => {
+    mountSnackbar()
+    for (const name of ['A', 'B']) snackbar.show(itemNoticeKey('saved', 1), 'success', { name })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(1000)
+    const bottom = Array.from(document.querySelectorAll('.snackbar')).find(
+      (card) => card.querySelector('strong')?.textContent === 'A',
+    )!
+    bottom.querySelector<HTMLButtonElement>('button')!.click()
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(document.querySelector('.snackbar strong')?.textContent).toBe('B')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(snackbar.notices.value).toHaveLength(0)
+  })
+
+  it('removes matching error messages from both visible slots and the hidden queue', async () => {
+    mountSnackbar()
+    snackbar.show('collection.deleteError', 'error')
+    snackbar.show(itemNoticeKey('saved', 1), 'success', { name: 'Keep me' })
+    snackbar.show('collection.deleteError', 'error')
+    snackbar.show('collection.deleteError', 'error')
+    await nextTick()
+    snackbar.dismissMessage('collection.deleteError')
+    await nextTick()
+    expect(snackbar.notices.value).toHaveLength(1)
+    expect(document.querySelectorAll('.snackbar')).toHaveLength(1)
+    expect(document.querySelector('.snackbar strong')?.textContent).toBe('Keep me')
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
   it('updates the language without restarting the timer and clears timers when unmounted', async () => {
     const i18n = mountSnackbar()
-    snackbar.show('itemForm.saved', 'success')
+    snackbar.show('itemForm.saved', 'success', { name: 'Example game' })
     await nextTick()
     await vi.advanceTimersByTimeAsync(3000)
     i18n.global.locale.value = 'en'
     await nextTick()
-    expect(document.querySelector('.snackbar')?.textContent).toContain(en.itemForm.saved)
+    expect(document.querySelector('.snackbar')?.textContent).toContain(
+      en.itemForm.saved.replace('{name}', 'Example game'),
+    )
     expect(document.querySelector('.snackbar-close')?.getAttribute('aria-label')).toBe(
       en.snackbar.close,
     )
     await vi.advanceTimersByTimeAsync(2000)
     expect(snackbar.notice.value).toBeNull()
-    snackbar.show('itemForm.saved', 'success')
+    snackbar.show('itemForm.saved', 'success', { name: 'Example game' })
     await nextTick()
     wrapper!.unmount()
     wrapper = undefined

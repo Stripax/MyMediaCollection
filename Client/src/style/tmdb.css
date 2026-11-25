@@ -76,18 +76,6 @@
 .tmdb-selected a {
   color: var(--accent);
 }
-.tmdb-attribution {
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-.tmdb-attribution img {
-  display: block;
-  width: 90px;
-  height: auto;
-}
 .tmdb-dialog .item-form-error {
   margin-top: 1rem;
 }

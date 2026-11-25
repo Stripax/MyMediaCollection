@@ -1,0 +1,46 @@
+.game-platform-badge {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--page-background);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.game-platform-badge[data-platform-family='xbox'] {
+  border-color: #15803d;
+  background: #166534;
+  color: #fff;
+}
+
+.game-platform-badge[data-platform-family='playstation'] {
+  border-color: #1d4ed8;
+  background: #1e40af;
+  color: #fff;
+}
+
+.game-platform-badge[data-platform-family='nintendo'] {
+  border-color: #dc2626;
+  background: #b91c1c;
+  color: #fff;
+}
+
+.game-platform-badge[data-platform-family='pc'] {
+  border-color: #636b75;
+  background: #24272d;
+  color: #f3f4f6;
+}
+
+.game-platform-badge[data-platform-family='sega'] {
+  border-color: #7c3aed;
+  background: #5b21b6;
+  color: #fff;
+}

@@ -3,11 +3,13 @@ import { Menu } from '@ark-ui/vue/menu'
 import { useI18n } from 'vue-i18n'
 import ToolbarTooltip from './ToolbarTooltip.vue'
 import ToolbarIcon from './ToolbarIcon.vue'
+import englishFlag from '../assets/flags/gb.svg'
+import finnishFlag from '../assets/flags/fi.svg'
 
 const { t, locale } = useI18n({ useScope: 'global' })
 const languages = [
-  { code: 'en', name: 'English', flag: '🇬🇧' },
-  { code: 'fi', name: 'Suomi', flag: '🇫🇮' },
+  { code: 'en', name: 'English', flag: englishFlag },
+  { code: 'fi', name: 'Suomi', flag: finnishFlag },
 ] as const
 </script>
 
@@ -36,7 +38,14 @@ const languages = [
               :value="language.code"
               class="language-menu-item"
             >
-              <span aria-hidden="true">{{ language.flag }}</span>
+              <img
+                :src="language.flag"
+                class="language-flag"
+                width="24"
+                height="16"
+                alt=""
+                aria-hidden="true"
+              />
               <Menu.ItemText :lang="language.code">{{ language.name }}</Menu.ItemText>
             </Menu.RadioItem>
           </Menu.RadioItemGroup>

@@ -8,7 +8,7 @@ namespace MyMediaCollection.API.Controllers;
 
 [ApiController]
 [Route("api/collection")]
-public sealed class CollectionController(CollectionRepository repository, TmdbTitleService titles, IgdbSourceService sources, ILogger<CollectionController> logger) : ControllerBase
+public sealed class CollectionController(CollectionRepository repository, TmdbTitleService titles, IgdbSourceService sources, BggExpansionService expansions, ILogger<CollectionController> logger) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<CollectionItem>>(StatusCodes.Status200OK)]
@@ -20,6 +20,7 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
             var items = await repository.GetAllAsync(cancellationToken);
             if (await titles.EnsureTitlesAsync(items, cancellationToken)) items = await repository.GetAllAsync(cancellationToken);
             if (await sources.EnsureUrlsAsync(items, cancellationToken)) items = await repository.GetAllAsync(cancellationToken);
+            if (await expansions.EnsureDetailsAsync(items, cancellationToken)) items = await repository.GetAllAsync(cancellationToken);
             return Ok(items);
         }
         catch (SqliteException exception)
@@ -43,6 +44,7 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
             if (item is null) return NotFound();
             return Ok(item);
         }
+        catch (CollectionValidationException exception) { return BadRequest(new { message = exception.Message }); }
         catch (SqliteException exception)
         {
             logger.LogError(exception, "Could not update collection item {ItemId}.", id);
@@ -81,6 +83,7 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
             var item = await repository.CreateAsync(request, cancellationToken);
             return StatusCode(StatusCodes.Status201Created, item);
         }
+        catch (CollectionValidationException exception) { return BadRequest(new { message = exception.Message }); }
         catch (SqliteException exception)
         {
             logger.LogError(exception, "Could not save a collection item.");

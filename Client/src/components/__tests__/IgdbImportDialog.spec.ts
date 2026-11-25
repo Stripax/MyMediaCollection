@@ -60,6 +60,10 @@ describe('IGDB import', () => {
     await dialog.get('input[name="IsPhysical"]').setValue(true)
     await dialog.get('.tmdb-import-form').trigger('submit')
     await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
+    expect(useSnackbar().notice.value).toMatchObject({
+      messageKey: 'collection.notifications.saved.videoGames',
+      params: { name: game.title },
+    })
     const body = JSON.parse(request.mock.calls[1]![1].body)
     expect(body.item.isPhysical).toBe(true)
     expect(body.item.platform).toBe(26)

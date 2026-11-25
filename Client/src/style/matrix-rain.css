@@ -1,0 +1,49 @@
+.matrix-rain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.55;
+  contain: strict;
+}
+
+.matrix-rain-column {
+  position: absolute;
+  top: 0;
+  white-space: pre;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.45;
+  background: linear-gradient(to bottom, transparent, #239a32 25%, #76ff03 90%, #d6ffcb);
+  background-clip: text;
+  color: transparent;
+  animation: matrix-rain-fall linear infinite;
+  animation-duration: calc(var(--rain-duration, 24s) / var(--rain-speed, 1));
+}
+
+@keyframes matrix-rain-fall {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100vh);
+  }
+}
+
+@media (max-width: 640px) {
+  .matrix-rain-column {
+    font-size: 11px;
+  }
+  .matrix-rain-column:nth-child(2n) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matrix-rain-column {
+    animation: none;
+    transform: translateY(-35%);
+  }
+}

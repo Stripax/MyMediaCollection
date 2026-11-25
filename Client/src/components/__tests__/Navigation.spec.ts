@@ -69,9 +69,12 @@ describe('Home and collection navigation', () => {
 
   it('opens All from home and returns to the introduction using the brand link', async () => {
     const { app, router } = await mountAt()
+    expect(app.get('.side-bar-toggle').attributes('aria-expanded')).toBe('false')
+    await app.get('.side-bar-toggle').trigger('click')
     await app.findAll('.side-bar-category')[0]!.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe('/collection/all')
+    expect(app.get('.side-bar-toggle').attributes('aria-expanded')).toBe('false')
     expect(app.find('table').exists()).toBe(true)
     expect(app.findAll('tbody tr')).toHaveLength(2)
     expect(app.find('.description').exists()).toBe(false)
@@ -89,18 +92,26 @@ describe('Home and collection navigation', () => {
 
   it('supports direct category URLs and browser back and forward navigation', async () => {
     const { app, router } = await mountAt('/collection/movies')
-    expect(app.get('tbody tr:not([aria-hidden="true"]) td').text()).toBe('Elokuva')
+    expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
+      'Elokuva',
+    )
     await app.findAll('.side-bar-category')[2]!.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe('/collection/tvSeries')
-    expect(app.get('tbody tr:not([aria-hidden="true"]) td').text()).toBe('Sarja')
+    expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
+      'Sarja',
+    )
     router.back()
     await flushPromises()
-    expect(app.get('tbody tr:not([aria-hidden="true"]) td').text()).toBe('Elokuva')
+    expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
+      'Elokuva',
+    )
     expect(app.findAll('.side-bar-category')[1]!.attributes('aria-pressed')).toBe('true')
     router.forward()
     await flushPromises()
-    expect(app.get('tbody tr:not([aria-hidden="true"]) td').text()).toBe('Sarja')
+    expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
+      'Sarja',
+    )
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 

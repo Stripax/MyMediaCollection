@@ -17,7 +17,7 @@ const seasons = [1, 2, 3].map((seasonNumber) => ({
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
 const plugins = (locale = 'fi') => [createI18n({ legacy: false, locale, messages: { en, fi } })]
 
-async function openEditor(editing = false) {
+async function openEditor(editing = false, completeBox = false) {
   vi.stubGlobal('scrollTo', vi.fn())
   wrapper = mount(CollectionItemDialog, {
     attachTo: document.body,
@@ -31,7 +31,7 @@ async function openEditor(editing = false) {
               mediaType: 2,
               mediaFormat: 2,
               info: null,
-              isCompleteBox: false,
+              isCompleteBox: completeBox,
               ownedSeasons: [
                 { seasonNumber: 1, mediaFormat: 1 },
                 { seasonNumber: 3, mediaFormat: 3 },
@@ -74,22 +74,71 @@ describe('TV season ownership', () => {
     await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
   })
 
-  it('selects all seasons for a manual complete box and clears the box flag when one is unchecked', async () => {
+  it('locks individual season selections for a complete box and unlocks them when unchecked', async () => {
     const dialog = await openEditor()
     await dialog.get('input[name="SeasonCount"]').setValue(3)
+    await dialog.get('input[name="OwnedSeason2"]').setValue(true)
+    await dialog.get('select[name="SeasonFormat2"]').setValue('3')
     await dialog.get('input[name="IsCompleteBox"]').setValue(true)
     expect(
       dialog
         .findAll('.tv-season-row input')
         .every((input) => (input.element as HTMLInputElement).checked),
     ).toBe(true)
-    await dialog.get('select[name="SeasonFormat2"]').setValue('2')
+    expect(
+      dialog
+        .findAll('.tv-season-row input')
+        .every((input) => (input.element as HTMLInputElement).disabled),
+    ).toBe(true)
+    expect(
+      dialog
+        .findAll('.tv-season-row select')
+        .every(
+          (select) =>
+            (select.element as HTMLSelectElement).disabled &&
+            (select.element as HTMLSelectElement).value === '1',
+        ),
+    ).toBe(true)
+    await dialog.get('select[name="MediaFormat"]').setValue('2')
+    expect(
+      dialog
+        .findAll('.tv-season-row select')
+        .every(
+          (select) =>
+            (select.element as HTMLSelectElement).disabled &&
+            (select.element as HTMLSelectElement).value === '2',
+        ),
+    ).toBe(true)
+    await dialog.get('input[name="SeasonCount"]').setValue(4)
+    expect((dialog.get('select[name="SeasonFormat4"]').element as HTMLSelectElement).value).toBe(
+      '2',
+    )
+    await dialog.get('input[name="IsCompleteBox"]').setValue(false)
+    expect(
+      dialog
+        .findAll('.tv-season-row select')
+        .every((select) => !(select.element as HTMLSelectElement).disabled),
+    ).toBe(true)
+    await dialog.get('select[name="SeasonFormat2"]').setValue('3')
+    await dialog.get('select[name="MediaFormat"]').setValue('1')
+    expect(
+      dialog
+        .findAll('.tv-season-row input')
+        .every((input) => !(input.element as HTMLInputElement).disabled),
+    ).toBe(true)
     await dialog.get('input[name="OwnedSeason3"]').setValue(false)
     expect((dialog.get('input[name="IsCompleteBox"]').element as HTMLInputElement).checked).toBe(
       false,
     )
     expect((dialog.get('select[name="SeasonFormat2"]').element as HTMLSelectElement).value).toBe(
-      '2',
+      '3',
+    )
+    expect((dialog.get('input[name="OwnedSeason3"]').element as HTMLInputElement).checked).toBe(
+      false,
+    )
+    await dialog.get('input[name="OwnedSeason3"]').setValue(true)
+    expect((dialog.get('input[name="OwnedSeason3"]').element as HTMLInputElement).checked).toBe(
+      true,
     )
   })
 
@@ -118,7 +167,29 @@ describe('TV season ownership', () => {
     await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
   })
 
-  it('loads TMDB season counts after selection and imports a complete box with per-season formats', async () => {
+  it('normalizes a saved complete box to its main format when opening the editor', async () => {
+    const request = vi.fn().mockResolvedValue(json({}))
+    vi.stubGlobal('fetch', request)
+    const dialog = await openEditor(true, true)
+    expect(
+      dialog
+        .findAll('.tv-season-row select')
+        .every(
+          (select) =>
+            (select.element as HTMLSelectElement).disabled &&
+            (select.element as HTMLSelectElement).value === '2',
+        ),
+    ).toBe(true)
+    await dialog.get('form').trigger('submit')
+    expect(JSON.parse(request.mock.calls[0]![1].body).OwnedSeasons).toEqual([
+      { seasonNumber: 1, mediaFormat: 2 },
+      { seasonNumber: 2, mediaFormat: 2 },
+      { seasonNumber: 3, mediaFormat: 2 },
+    ])
+    await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
+  })
+
+  it('loads TMDB season counts and imports a complete box with the shared main format', async () => {
     const series = {
       tmdbId: 100,
       mediaType: 2,
@@ -153,14 +224,28 @@ describe('TV season ownership', () => {
     expect(dialog.get('.tv-season-totals').text()).toContain('24')
     expect(dialog.find('input[name="SeasonCount"]').exists()).toBe(false)
     await dialog.get('input[name="IsCompleteBox"]').setValue(true)
-    await dialog.get('select[name="SeasonFormat2"]').setValue('3')
+    expect(
+      dialog
+        .findAll('.tv-season-row input')
+        .every((input) => (input.element as HTMLInputElement).disabled),
+    ).toBe(true)
+    await dialog.get('select[name="MediaFormat"]').setValue('3')
+    expect(
+      dialog
+        .findAll('.tv-season-row select')
+        .every(
+          (select) =>
+            (select.element as HTMLSelectElement).disabled &&
+            (select.element as HTMLSelectElement).value === '3',
+        ),
+    ).toBe(true)
     await dialog.get('.tmdb-import-form').trigger('submit')
     const body = JSON.parse(request.mock.calls[2]![1].body)
     expect(body.item.isCompleteBox).toBe(true)
     expect(body.item.ownedSeasons).toEqual([
-      { seasonNumber: 1, mediaFormat: 1 },
+      { seasonNumber: 1, mediaFormat: 3 },
       { seasonNumber: 2, mediaFormat: 3 },
-      { seasonNumber: 3, mediaFormat: 1 },
+      { seasonNumber: 3, mediaFormat: 3 },
     ])
     await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
   })
@@ -180,6 +265,7 @@ describe('TV season ownership', () => {
             ownedSeasons: [
               { seasonNumber: 1, mediaFormat: 1 },
               { seasonNumber: 2, mediaFormat: 2 },
+              { seasonNumber: 3, mediaFormat: 1 },
             ],
           },
         ],
@@ -188,8 +274,11 @@ describe('TV season ownership', () => {
       },
       global: { plugins: plugins() },
     })
-    expect(wrapper.get('.collection-format').text()).toBe(
-      `${fi.tvOwnership.completeBoxShort} · DVD / Blu-ray`,
-    )
+    expect(wrapper.findAll('.media-format-badge').map((tag) => tag.text())).toEqual([
+      fi.tvOwnership.completeBoxShort,
+      'DVD',
+      'Blu-ray',
+    ])
+    expect(wrapper.find('th.collection-format').exists()).toBe(false)
   })
 })

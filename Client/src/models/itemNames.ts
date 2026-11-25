@@ -16,11 +16,12 @@ export function displayItemName(item: CollectionItem, locale: string) {
 }
 
 export function searchableItemNames(item: CollectionItem) {
-  return hasTmdbNames(item)
+  const names = hasTmdbNames(item)
     ? [
         item.name,
         ...Object.values(item.localizedTitles ?? {}),
         item.sourceMetadata?.originalTitle ?? '',
       ]
     : [item.name]
+  return [...names, ...(item.collectionContents?.map((entry) => entry.name) ?? [])]
 }

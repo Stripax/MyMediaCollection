@@ -422,3 +422,158 @@ failed attempts retry after two minutes and missing slugs after five minutes.
 The collection remains accessible if IGDB is unavailable. Manual items without
 a source link keep a plain image. Links support keyboard focus and announce
 the source and new tab in both UI languages.
+
+## BoardGameGeek search and import
+
+BGG search is available in All and Board/card games alongside manual addition.
+The integration uses the authenticated XML API2 (`search` and `thing`) and keeps
+the application token on the backend. Configure the approved application's token
+from the repository root, then restart the backend:
+
+```powershell
+dotnet user-secrets set "Bgg:ApiKey" "YOUR_BGG_APPLICATION_TOKEN" --project Backend/MyMediaCollection.API
+```
+
+For deployment, use the environment variable `Bgg__ApiKey`. Never put this token
+in a frontend `.env` file or committed application settings. See the official
+[BGG authentication guide](https://boardgamegeek.com/using_the_xml_api) and
+[XML API2 reference](https://boardgamegeek.com/wiki/page/BGG_XML_API2).
+
+Apply `MyMediaCollection.API/Data/Migrations/010-add-bgg-metadata.sql` once after
+migration 009 before running the updated API. It creates `BggMetadata` and a
+nullable `Collection.BggMetadataId` reference. Existing items remain unchanged.
+The local database is backed up before applying this migration. No automatic
+schema changes happen on application startup.
+
+Endpoints:
+
+- `GET /api/bgg/search?query=Catan&page=1`: board games and expansions, including
+  card games catalogued by BGG, paginated locally at 20 results per page.
+- `GET /api/bgg/details?bggId=13`: primary title, description, publication year,
+  cover, player range, play time and suggested age.
+- `POST /api/bgg/import`: `{ "bggId": 13, "item": { "name": "CATAN",
+  "mediaType": 4, "mediaFormat": 4, "info": "Own notes" } }`.
+
+The client selects board game (4), card game (5) or other (99) explicitly; BGG's
+board-game category does not reliably distinguish physical card games. Source
+details are read-only and separate from the collection name and personal notes.
+BGG descriptions are displayed as plain text, usually English. Covers link to
+the BGG item in the table and editor, with the existing tooltip and hover styles.
+BGG attribution is shown in the import dialog and tables containing BGG items.
+
+Imports obtain canonical details from BGG or its server cache rather than trusting
+browser-supplied metadata. Metadata is shared between copies, saved atomically
+with collection items, and preserved on edits. Changing category detaches the
+link; deleting a copy leaves shared metadata intact. Only BGG image hosts are
+accepted. XML external entities and DTDs are disabled and document size is limited.
+
+Outgoing BGG calls are serialized with a five-second minimum spacing; search
+results are cached for ten minutes and details for 24 hours in backend memory.
+BGG's queued response (202), authentication errors, throttling and malformed XML
+produce controlled form/snackbar errors without partial saves. Cancellation is
+forwarded. For isolated tests, `Bgg:BaseUrl` and
+`Bgg:RequestIntervalMilliseconds` can point to the local mock with a zero delay;
+production defaults to `https://boardgamegeek.com/xmlapi2/` and 5000 ms.
+
+### BGG expansions and required games
+
+Migration `011-add-bgg-expansion-details.sql` adds nullable `IsExpansion` and
+`RequiredGamesJson` to `BggMetadata`. Apply it after migration 010; existing
+entries start with unknown classification rather than being assumed base games.
+On collection loading, missing classifications are fetched using the existing
+BGG credentials, cache and request spacing. Only the expansion fields are
+updated, preserving source titles, descriptions and personal copy details.
+Failures keep the collection accessible and retry after two minutes.
+
+Search and details expose `isExpansion` from the XML item type
+`boardgameexpansion`. Required games come from `link type="boardgameexpansion"`
+with `inbound="true"`; outgoing links describe expansions for the item and are
+excluded. IDs and names are validated and deduplicated, self-links are ignored,
+and BGG URLs are generated from IDs. More than one required game can be listed,
+including another expansion. An empty list means BGG lists no requirements;
+the UI does not infer that the expansion is independently playable.
+
+The import preview shows the source classification and required-game links.
+The editor uses the source values as defaults for the editable collection
+classification and base games described below. BGG source metadata itself is
+preserved. The classification is separate from board/card/other format.
+
+Table required-game badges have no underline. A BGG ID match anywhere in the
+loaded collection opens that copy's editor, including when its row is hidden by
+search. Renamed copies are matched by BGG ID rather than title. If several
+copies share an ID, the first in collection order is selected. When no copy
+exists, the badge opens the BGG page in a new tab. Saving through this editor
+refreshes the collection and focus returns to the badge after closing.
+
+### Editable tabletop classification and base games
+
+Migration `012-add-board-game-classification.sql` adds nullable
+`Collection.BoardGameKind` and `Collection.BaseGamesJson`; apply it after
+migration 011. Existing manual tabletop items default to Base game, while BGG
+items retain source defaults until the user saves their own selection.
+
+Manual creation and editing expose a classification dropdown between Name and
+Game type: Base game (1), Expansion (2), Other (99). For expansions and Other items, users can
+select one or more required games from the collection or enter names manually.
+The editor no longer duplicates the classification in the read-only BGG panel.
+Table badges follow these editable values, including manually added games.
+
+API requests may supply `boardGameKind` and `baseGames`, for example:
+
+```json
+{
+  "name": "My expansion",
+  "mediaType": 4,
+  "mediaFormat": 5,
+  "boardGameKind": 2,
+  "baseGames": [
+    { "collectionItemId": 20 },
+    { "name": "A game outside my collection" }
+  ]
+}
+```
+
+Each reference can contain `collectionItemId`, `bggId`, and `name`. Selected
+collection references are validated server-side and their names and BGG IDs
+come from the stored item. Self-reference, missing items and non-tabletop
+references are rejected atomically. Parent renames are reflected on reads;
+deleting a parent leaves its saved name and BGG reference available. Parent
+deletion never deletes an expansion. Typed names without a BGG ID are plain
+tags; collection references open the item editor, and BGG references open the
+source page when no owned copy exists.
+
+Omitting the new fields preserves existing choices for older clients. An empty
+`baseGames` array clears relationships. Switching to Base game clears
+the relationships; switching between Expansion and Other preserves them.
+Other items can represent accessories such as figure packs without being marked
+as expansions. Switching categories clears tabletop-specific choices.
+BGG imports default to provider values, and future provider backfills do not
+overwrite user selections. Personal classification and reference saves share
+the collection transaction.
+
+### Movie and TV collections
+
+Apply `013-add-media-collections.sql` after migration 012. It adds
+`Collection.IsCollection` and the ordered `CollectionContents` table, preserving
+existing items as ordinary titles. Back up the database before applying it.
+
+The **Collection** checkbox before Name enables a movie or TV box. A box is one
+collection row with its own name and one shared disc format. Manual creation
+accepts `isCollection: true` and `collectionContents: [{ "name": "First movie" }]`.
+The editor supports changing member names and adding or removing members.
+TV boxes do not use individual season ownership or per-season formats.
+
+TMDB imports accept `tmdbIds: [701, 702]` alongside `tmdbId: 701` and
+`item.isCollection: true`. Search and select titles repeatedly, then enter a
+name for the box. The first selected title supplies its cover and source link.
+All titles must belong to the selected category, and the ordered selection is
+saved with their TMDB references. The box name remains user-defined when the
+interface language changes. Search also matches its member names.
+
+Imports fetch primary metadata for all members before saving; a failed lookup
+leaves no partial box. Changes to the item and contents share one transaction.
+Editing may retain or remove existing TMDB references; new source references
+are attached through TMDB import. Omitting collection fields preserves an
+existing box for older API callers. Turning collection mode off clears the
+member list, and deleting a box cascades to its contents while keeping shared
+TMDB metadata.

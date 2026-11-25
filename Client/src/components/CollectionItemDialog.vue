@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { Dialog } from '@ark-ui/vue/dialog'
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ToolbarTooltip from './ToolbarTooltip.vue'
 import ToolbarIcon from './ToolbarIcon.vue'
 import CollectionSourceDetails from './CollectionSourceDetails.vue'
 import TvSeasonOwnership from './TvSeasonOwnership.vue'
+import BoardGameFields from './BoardGameFields.vue'
+import MediaCollectionContents from './MediaCollectionContents.vue'
 import { snackbarElements, useSnackbar } from '../composables/useSnackbar'
-import { posterUrl } from '../models/tmdb'
-import { itemSourceUrl } from '../models/itemSources'
-import { igdbCoverUrl } from '../models/igdb'
+import {
+  itemSourceUrl,
+  itemCoverUrl,
+  itemSourceName,
+  itemSourceTooltip,
+} from '../models/itemSources'
 import { displayItemName } from '../models/itemNames'
+import { itemNoticeKey } from '../models/itemNotices'
 import {
   mediaCategories as mediaTypes,
   mediaFormats,
@@ -22,6 +28,10 @@ import {
   type CollectionItem,
   type CollectionCategory,
   type OwnedSeason,
+  type BoardGameReference,
+  type CollectionContent,
+  boardGameKind,
+  boardGameParents,
 } from '../models/collection'
 
 const { t, locale } = useI18n({ useScope: 'global' })
@@ -29,8 +39,10 @@ const props = withDefaults(
   defineProps<{
     item?: CollectionItem
     category?: CollectionCategory
+    hideTrigger?: boolean
+    items?: CollectionItem[]
   }>(),
-  { category: 'all' },
+  { category: 'all', items: () => [] },
 )
 const emit = defineEmits<{ saved: [] }>()
 const form = reactive({ MediaType: 1, Name: '', MediaFormat: 1, Info: '' })
@@ -39,9 +51,25 @@ const selectedStore = ref<number | ''>('')
 const isPhysical = ref(false)
 const initialName = ref('')
 const isCompleteBox = ref(false)
+const isCollection = ref(false)
+const collectionContents = ref<CollectionContent[]>([])
+watch(isCollection, (value) => {
+  if (value && !collectionContents.value.length) collectionContents.value = [{ name: '' }]
+})
+watch(
+  () => form.MediaType,
+  (value, previous) => {
+    if (value !== previous && !props.item) {
+      isCollection.value = false
+      collectionContents.value = []
+    }
+  },
+)
 const ownedSeasons = ref<OwnedSeason[]>([])
 const ownershipVersion = ref(0)
 const selectedBoardFormat = ref<number | ''>('')
+const selectedBoardKind = ref(1)
+const baseGames = ref<BoardGameReference[]>([])
 const isTabletopGame = computed(() => form.MediaType === 4)
 const isVideoGame = computed(() => form.MediaType === 3)
 const isPcGame = computed(() => isVideoGame.value && selectedPlatform.value === pcPlatform)
@@ -54,17 +82,13 @@ const saving = ref(false)
 const error = ref('')
 const { show, dismissMessage } = useSnackbar()
 const pendingSave = ref(false)
+let savedName = ''
+let savedMediaType = 1
 const transitioning = ref(false)
 const trigger = ref<{ $el: HTMLButtonElement } | null>(null)
 const returnFocusTarget = ref<HTMLElement | null>(null)
 const posterFailed = ref(false)
-const editPosterUrl = computed(() =>
-  props.item && (props.item.mediaType === 1 || props.item.mediaType === 2)
-    ? posterUrl(props.item.posterPath)
-    : props.item?.mediaType === 3
-      ? igdbCoverUrl(props.item.coverImageId)
-      : null,
-)
+const editPosterUrl = computed(() => (props.item ? itemCoverUrl(props.item) : null))
 
 function finishClose() {
   transitioning.value = false
@@ -72,7 +96,9 @@ function finishClose() {
   if (!pendingSave.value) return
   pendingSave.value = false
   Object.assign(form, { MediaType: 1, Name: '', MediaFormat: 1, Info: '' })
-  show(props.item ? 'itemForm.updated' : 'itemForm.saved', 'success')
+  show(itemNoticeKey(props.item ? 'updated' : 'saved', savedMediaType), 'success', {
+    name: savedName,
+  })
   emit('saved')
 }
 
@@ -81,6 +107,24 @@ function optionLabel(option: { value: number; label: string }) {
 }
 
 function prepareForm() {
+  isCollection.value = props.item?.isCollection ?? false
+  collectionContents.value = props.item?.collectionContents?.map((entry) => ({ ...entry })) ?? []
+  selectedBoardKind.value = props.item ? (boardGameKind(props.item) ?? 99) : 1
+  baseGames.value = props.item
+    ? boardGameParents(props.item).map((game) => {
+        const owned = props.items.find(
+          (item) =>
+            item.mediaType === 4 &&
+            item.id !== props.item?.id &&
+            (game.collectionItemId
+              ? item.id === game.collectionItemId
+              : game.bggId && item.bggId === game.bggId),
+        )
+        return owned
+          ? { collectionItemId: owned.id, name: owned.name, bggId: owned.bggId }
+          : { ...game }
+      })
+    : []
   ownershipVersion.value++
   isCompleteBox.value = props.item?.isCompleteBox ?? false
   ownedSeasons.value = props.item?.ownedSeasons?.map((season) => ({ ...season })) ?? []
@@ -129,7 +173,18 @@ async function save() {
     reportError('itemForm.gameTypeRequired')
     return
   }
+  if (
+    hasMediaFormat.value &&
+    isCollection.value &&
+    (!collectionContents.value.length ||
+      collectionContents.value.some((entry) => !entry.name.trim()))
+  ) {
+    reportError('mediaCollection.contentsRequired')
+    return
+  }
   saving.value = true
+  const requestedName = form.Name.trim()
+  const requestedMediaType = form.MediaType
   try {
     const response = await fetch(
       props.item ? `/api/collection/${props.item.id}` : '/api/collection',
@@ -138,7 +193,7 @@ async function save() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          Name: form.Name.trim(),
+          Name: requestedName,
           MediaFormat: isTabletopGame.value
             ? selectedBoardFormat.value
             : hasMediaFormat.value
@@ -149,10 +204,30 @@ async function save() {
             ? { Store: selectedStore.value }
             : {}),
           ...(isVideoGame.value ? { IsPhysical: isPhysical.value } : {}),
+          ...(hasMediaFormat.value && (isCollection.value || props.item?.isCollection)
+            ? {
+                IsCollection: isCollection.value,
+                CollectionContents: isCollection.value
+                  ? collectionContents.value.map((entry) => ({
+                      Name: entry.name.trim(),
+                      ...(entry.tmdbId ? { TmdbId: entry.tmdbId } : {}),
+                    }))
+                  : [],
+              }
+            : {}),
+          ...(isTabletopGame.value
+            ? {
+                BoardGameKind: selectedBoardKind.value,
+                BaseGames:
+                  selectedBoardKind.value === 2 || selectedBoardKind.value === 99
+                    ? baseGames.value.filter((game) => game.collectionItemId || game.name.trim())
+                    : [],
+              }
+            : {}),
           ...(props.item?.tmdbId
             ? { NameWasEdited: form.Name.trim() !== initialName.value.trim() }
             : {}),
-          ...(form.MediaType === 2
+          ...(form.MediaType === 2 && !isCollection.value
             ? { IsCompleteBox: isCompleteBox.value, OwnedSeasons: ownedSeasons.value }
             : {}),
         }),
@@ -168,6 +243,8 @@ async function save() {
       )
       return
     }
+    savedName = requestedName
+    savedMediaType = requestedMediaType
     pendingSave.value = true
     open.value = false
   } catch {
@@ -201,7 +278,7 @@ function reportError(message: string) {
     lazy-mount
   >
     <ToolbarTooltip
-      v-if="item"
+      v-if="item && !hideTrigger"
       v-slot="{ describedby }"
       :text="t('collection.edit')"
       class="collection-action-tooltip"
@@ -218,7 +295,7 @@ function reportError(message: string) {
       </Dialog.Trigger>
     </ToolbarTooltip>
     <Dialog.Trigger
-      v-else
+      v-else-if="!item && !hideTrigger"
       ref="trigger"
       :disabled="pendingSave || transitioning"
       class="collection-add-button positive-button"
@@ -264,13 +341,7 @@ function reportError(message: string) {
                   <ToolbarTooltip
                     v-if="editPosterUrl && !posterFailed"
                     v-slot="{ describedby }"
-                    :text="
-                      t(
-                        item?.mediaType === 3
-                          ? 'sourceMetadata.openIgdb'
-                          : 'sourceMetadata.openTmdb',
-                      )
-                    "
+                    :text="item ? t(itemSourceTooltip(item)) : ''"
                     :disabled="!item || !itemSourceUrl(item)"
                     class="cover-tooltip item-dialog-cover-tooltip"
                   >
@@ -284,7 +355,7 @@ function reportError(message: string) {
                         item && itemSourceUrl(item)
                           ? t('sourceMetadata.openSource', {
                               name: displayItemName(item, locale),
-                              source: item.mediaType === 3 ? 'IGDB' : 'TMDB',
+                              source: itemSourceName(item),
                             })
                           : undefined
                       "
@@ -325,10 +396,25 @@ function reportError(message: string) {
                         </option>
                       </select>
                     </label>
+                    <label v-if="hasMediaFormat" class="item-form-checkbox">
+                      <input v-model="isCollection" name="IsCollection" type="checkbox" />
+                      <span>{{ t('mediaCollection.label') }}</span>
+                    </label>
                     <label class="item-form-field">
                       <span>{{ t('itemForm.name') }}</span>
                       <input v-model="form.Name" name="Name" type="text" required maxlength="300" />
                     </label>
+                    <MediaCollectionContents
+                      v-if="hasMediaFormat && isCollection"
+                      v-model="collectionContents"
+                    />
+                    <BoardGameFields
+                      v-if="isTabletopGame"
+                      v-model:kind="selectedBoardKind"
+                      v-model:base-games="baseGames"
+                      :items="items"
+                      :item-id="item?.id"
+                    />
 
                     <label v-if="isVideoGame" class="item-form-field">
                       <span>{{ t('itemForm.platform') }}</span>
@@ -359,7 +445,7 @@ function reportError(message: string) {
                     <label v-else-if="hasMediaFormat" class="item-form-field">
                       <span>{{
                         t(
-                          form.MediaType === 2
+                          form.MediaType === 2 && !isCollection
                             ? 'tvOwnership.defaultFormat'
                             : 'itemForm.mediaFormat',
                         )
@@ -378,7 +464,7 @@ function reportError(message: string) {
                       </select>
                     </label>
                     <TvSeasonOwnership
-                      v-if="form.MediaType === 2"
+                      v-if="form.MediaType === 2 && !isCollection"
                       :key="ownershipVersion"
                       v-model:complete-box="isCompleteBox"
                       v-model:owned-seasons="ownedSeasons"

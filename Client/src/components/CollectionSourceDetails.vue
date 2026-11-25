@@ -6,7 +6,9 @@ import type { CollectionSourceMetadata } from '../models/collection'
 const props = defineProps<{ metadata: CollectionSourceMetadata; mediaType: number }>()
 const { t, locale } = useI18n({ useScope: 'global' })
 const headingId = useId()
-const releaseYear = computed(() => props.metadata.releaseDate?.match(/^\d{4}/)?.[0])
+const releaseYear = computed(
+  () => props.metadata.yearPublished ?? props.metadata.releaseDate?.match(/^\d{4}/)?.[0],
+)
 const overview = computed(() => {
   const metadata = props.metadata
   if (metadata.source !== 'TMDB' || !metadata.localizedOverviews) return metadata.overview
@@ -65,6 +67,30 @@ function formatDate(value: string, withTime = false) {
           {{ overview || t('sourceMetadata.noOverview') }}
         </dd>
       </div>
+      <template v-if="metadata.source === 'BGG'">
+        <div class="source-details-row">
+          <dt>{{ t('bgg.players') }}</dt>
+          <dd>
+            {{ metadata.minPlayers ?? t('sourceMetadata.unknown') }}–{{
+              metadata.maxPlayers ?? t('sourceMetadata.unknown')
+            }}
+          </dd>
+        </div>
+        <div class="source-details-row">
+          <dt>{{ t('bgg.playingTime') }}</dt>
+          <dd>
+            {{
+              metadata.playingTime
+                ? t('bgg.minutes', { count: metadata.playingTime })
+                : t('sourceMetadata.unknown')
+            }}
+          </dd>
+        </div>
+        <div class="source-details-row">
+          <dt>{{ t('bgg.minAge') }}</dt>
+          <dd>{{ metadata.minAge ? `${metadata.minAge}+` : t('sourceMetadata.unknown') }}</dd>
+        </div>
+      </template>
       <template v-if="mediaType === 2">
         <div class="source-details-row">
           <dt>{{ t('tvOwnership.seasonCount') }}</dt>

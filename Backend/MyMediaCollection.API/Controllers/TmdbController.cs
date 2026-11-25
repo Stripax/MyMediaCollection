@@ -38,17 +38,25 @@ public sealed class TmdbController(TmdbClient tmdb, CollectionRepository reposit
     {
         try
         {
-            var metadata = await tmdb.DetailsAsync(request.Item.MediaType, request.TmdbId, request.Language, cancellationToken);
-            var translations = new List<TmdbMetadata> { metadata };
-            try
+            var members = new List<TmdbMetadata>();
+            var translations = new List<TmdbMetadata>();
+            foreach (var id in request.TmdbIds ?? [request.TmdbId])
             {
-                translations.Add(await tmdb.DetailsAsync(request.Item.MediaType, request.TmdbId,
-                    request.Language == "fi-FI" ? "en-US" : "fi-FI", cancellationToken));
+                var member = await tmdb.DetailsAsync(request.Item.MediaType, id, request.Language, cancellationToken);
+                members.Add(member);
+                translations.Add(member);
+                try
+                {
+                    translations.Add(await tmdb.DetailsAsync(request.Item.MediaType, id,
+                        request.Language == "fi-FI" ? "en-US" : "fi-FI", cancellationToken));
+                }
+                catch (TmdbException) { /* Keep imports usable while a secondary translation is unavailable. */ }
             }
-            catch (TmdbException) { /* Keep primary-language imports usable while the other translation is unavailable. */ }
-            return StatusCode(201, await repository.CreateAsync(request.Item, cancellationToken, metadata,
-                translations: translations, useLocalizedName: request.UseLocalizedName));
+            return StatusCode(201, await repository.CreateAsync(request.Item, cancellationToken, members[0],
+                translations: translations, useLocalizedName: request.UseLocalizedName,
+                collectionMetadata: request.Item.IsCollection == true ? members : null));
         }
+        catch (CollectionValidationException exception) { return BadRequest(new { message=exception.Message }); }
         catch (TmdbException exception) { return TmdbProblem(exception); }
         catch (SqliteException exception)
         {

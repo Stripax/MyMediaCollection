@@ -17,9 +17,10 @@ async function openForm(
   locale = 'fi',
   item?: CollectionItem,
   category: CollectionCategory = 'all',
+  items: CollectionItem[] = [],
 ) {
   wrapper = mount(CollectionItemDialog, {
-    props: { item, category },
+    props: { item, category, items },
     attachTo: document.body,
     global: {
       stubs: { transition: false },
@@ -39,6 +40,169 @@ afterEach(() => {
 })
 
 describe('Collection item dialog', () => {
+  it.each(['movies', 'tvSeries'] as const)(
+    'adds a manual %s collection with one shared format',
+    async (category) => {
+      const request = vi.fn().mockResolvedValue(new Response('{}', { status: 201 }))
+      vi.stubGlobal('fetch', request)
+      const dialog = await openForm('fi', undefined, category)
+      expect(dialog.findAll('label > span')[0]!.text()).toBe(fi.mediaCollection.label)
+      await dialog.get('input[name="IsCollection"]').setValue(true)
+      await dialog.get('input[name="Name"]').setValue('Oma boksi')
+      await dialog.get('input[name="CollectionContent-0"]').setValue('Ensimmäinen')
+      await dialog.get('.media-collection-contents > button').trigger('click')
+      await dialog.get('input[name="CollectionContent-1"]').setValue('Toinen')
+      await dialog.get('select[name="MediaFormat"]').setValue('2')
+      expect(dialog.find('.tv-season-ownership').exists()).toBe(false)
+      expect(dialog.findAll('select[name="MediaFormat"]')).toHaveLength(1)
+      await dialog.get('form').trigger('submit')
+      expect(JSON.parse(request.mock.calls[0]![1].body)).toEqual({
+        MediaType: category === 'movies' ? 1 : 2,
+        Name: 'Oma boksi',
+        MediaFormat: 2,
+        Info: '',
+        IsCollection: true,
+        CollectionContents: [{ Name: 'Ensimmäinen' }, { Name: 'Toinen' }],
+      })
+    },
+  )
+
+  it('edits imported collection contents while retaining their source references', async () => {
+    const request = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('fi', {
+      id: 77,
+      name: 'Boksi',
+      mediaType: 1,
+      mediaFormat: 2,
+      info: null,
+      isCollection: true,
+      collectionContents: [
+        { name: 'Ensimmäinen', tmdbId: 701 },
+        { name: 'Toinen', tmdbId: 702 },
+      ],
+    })
+    expect((dialog.get('input[name="IsCollection"]').element as HTMLInputElement).checked).toBe(
+      true,
+    )
+    await dialog.get('input[name="CollectionContent-1"]').setValue('Uusi nimi')
+    await dialog.get('form').trigger('submit')
+    expect(JSON.parse(request.mock.calls[0]![1].body).CollectionContents).toEqual([
+      { Name: 'Ensimmäinen', TmdbId: 701 },
+      { Name: 'Uusi nimi', TmdbId: 702 },
+    ])
+  })
+
+  it.each([
+    ['fi', 2],
+    ['en', 2],
+    ['fi', 99],
+    ['en', 99],
+  ] as const)(
+    'adds a manual related item with a named base game in %s (kind %s)',
+    async (locale, kind) => {
+      const request = vi.fn().mockResolvedValue(new Response('{}', { status: 201 }))
+      vi.stubGlobal('fetch', request)
+      const labels = locale === 'fi' ? fi : en
+      const dialog = await openForm(locale, undefined, 'boardGames')
+      expect(dialog.findAll('label > span').map((label) => label.text())).toEqual([
+        labels.itemForm.name,
+        labels.bgg.classification,
+        labels.itemForm.gameType,
+        labels.itemForm.info,
+      ])
+      expect(
+        dialog
+          .findAll('select[name="BoardGameKind"] option')
+          .map((option) => option.attributes('value')),
+      ).toEqual(['1', '2', '99'])
+      await dialog.get('input[name="Name"]').setValue('My expansion')
+      await dialog.get('select[name="BoardGameKind"]').setValue(String(kind))
+      await dialog.get('input[name="BaseGameName-0"]').setValue('Unlisted base game')
+      await dialog.get('select[name="MediaFormat"]').setValue('5')
+      await dialog.get('form').trigger('submit')
+      expect(JSON.parse(request.mock.calls[0]![1].body)).toMatchObject({
+        MediaType: 4,
+        MediaFormat: 5,
+        BoardGameKind: kind,
+        BaseGames: [{ name: 'Unlisted base game' }],
+      })
+    },
+  )
+
+  it('prefills BGG expansion defaults, selects owned parents by ID and saves an independent override', async () => {
+    const request = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', request)
+    const parent: CollectionItem = {
+      id: 20,
+      name: 'Renamed base',
+      mediaType: 4,
+      mediaFormat: 4,
+      info: null,
+      bggId: 13,
+    }
+    const dialog = await openForm(
+      'fi',
+      {
+        id: 30,
+        name: 'Expansion',
+        mediaType: 4,
+        mediaFormat: 5,
+        info: null,
+        bggId: 17,
+        sourceMetadata: {
+          source: 'BGG',
+          title: 'Source expansion',
+          originalTitle: null,
+          overview: '',
+          releaseDate: null,
+          language: null,
+          platforms: [],
+          fetchedAt: null,
+          isExpansion: true,
+          requiredGames: [{ bggId: 13, name: 'BGG base' }],
+        },
+      },
+      'boardGames',
+      [parent],
+    )
+    expect((dialog.get('select[name="BoardGameKind"]').element as HTMLSelectElement).value).toBe(
+      '2',
+    )
+    expect((dialog.get('select[name="BaseGameId-0"]').element as HTMLSelectElement).value).toBe(
+      '20',
+    )
+    expect(dialog.find('.source-details .bgg-expansion-details').exists()).toBe(false)
+    await dialog.get('select[name="BoardGameKind"]').setValue('1')
+    expect(dialog.find('.board-game-parents').exists()).toBe(false)
+    await dialog.get('form').trigger('submit')
+    expect(JSON.parse(request.mock.calls[0]![1].body)).toMatchObject({
+      BoardGameKind: 1,
+      BaseGames: [],
+    })
+  })
+
+  it('preserves an owned base game when switching from Expansion to Other', async () => {
+    const request = vi.fn().mockResolvedValue(new Response('{}', { status: 201 }))
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('fi', undefined, 'boardGames', [
+      { id: 20, name: 'Manual base', mediaType: 4, mediaFormat: 4, info: null },
+    ])
+    await dialog.get('input[name="Name"]').setValue('Expansion')
+    await dialog.get('select[name="BoardGameKind"]').setValue('2')
+    await dialog.get('select[name="BaseGameId-0"]').setValue('20')
+    await dialog.get('select[name="BoardGameKind"]').setValue('99')
+    expect((dialog.get('select[name="BaseGameId-0"]').element as HTMLSelectElement).value).toBe(
+      '20',
+    )
+    expect(dialog.find('input[name="BaseGameName-0"]').exists()).toBe(false)
+    await dialog.get('select[name="MediaFormat"]').setValue('4')
+    await dialog.get('form').trigger('submit')
+    expect(JSON.parse(request.mock.calls[0]![1].body).BoardGameKind).toBe(99)
+    expect(JSON.parse(request.mock.calls[0]![1].body).BaseGames).toEqual([
+      { collectionItemId: 20, name: 'Manual base' },
+    ])
+  })
   it.each([false, true])(
     'tracks name changes separately from other edits for a localized TMDB item (renaming: %s)',
     async (renaming) => {
@@ -61,6 +225,12 @@ describe('Collection item dialog', () => {
       const body = JSON.parse(request.mock.calls[0]![1].body)
       expect(body.NameWasEdited).toBe(renaming)
       expect(body.Name).toBe(renaming ? 'My own title' : 'Jaws')
+      await vi.waitFor(() =>
+        expect(useSnackbar().notice.value).toMatchObject({
+          messageKey: 'collection.notifications.updated.movies',
+          params: { name: renaming ? 'My own title' : 'Jaws' },
+        }),
+      )
     },
   )
 
@@ -230,7 +400,9 @@ describe('Collection item dialog', () => {
       const dialog = await openForm('fi', undefined, category)
       expect(dialog.get('.item-dialog-title').text()).toBe(fi.collection.add[category])
       expect(dialog.find('select[name="MediaType"]').exists()).toBe(false)
-      expect(dialog.findAll('label > span')[0]!.text()).toBe(fi.itemForm.name)
+      expect(dialog.get('input[name="Name"]').element.closest('label')?.textContent).toBe(
+        fi.itemForm.name,
+      )
       await dialog.get('input[name="Name"]').setValue('Uusi kohde')
       if (mediaType === 3) await dialog.get('select[name="Platform"]').setValue('9')
       if (mediaType === 4) await dialog.get('select[name="MediaFormat"]').setValue('4')
@@ -244,9 +416,16 @@ describe('Collection item dialog', () => {
           MediaFormat: mediaType === 4 ? 4 : mediaType < 3 ? 1 : null,
           Info: '',
           ...(mediaType === 3 ? { Platform: 9, IsPhysical: false } : {}),
+          ...(mediaType === 4 ? { BoardGameKind: 1, BaseGames: [] } : {}),
           ...(mediaType === 2 ? { IsCompleteBox: false, OwnedSeasons: [] } : {}),
         }),
       })
+      await vi.waitFor(() =>
+        expect(useSnackbar().notice.value).toMatchObject({
+          messageKey: `collection.notifications.saved.${category}`,
+          params: { name: 'Uusi kohde' },
+        }),
+      )
     },
   )
 
@@ -279,6 +458,12 @@ describe('Collection item dialog', () => {
       const body = JSON.parse(request.mock.calls[0]![1].body)
       expect(body.MediaType).toBe(category.value)
       expect(body.Name).toBe('Muokattu kohde')
+      await vi.waitFor(() =>
+        expect(useSnackbar().notice.value).toMatchObject({
+          messageKey: `collection.notifications.updated.${category.id}`,
+          params: { name: 'Muokattu kohde' },
+        }),
+      )
     },
   )
 
@@ -288,6 +473,7 @@ describe('Collection item dialog', () => {
     expect(dialog.get('.item-dialog-title').text()).toBe(labels.collection.add.movies)
     expect(dialog.findAll('label > span').map((label) => label.text())).toEqual([
       labels.itemForm.category,
+      labels.mediaCollection.label,
       labels.itemForm.name,
       labels.itemForm.mediaFormat,
       labels.itemForm.info,
@@ -598,7 +784,9 @@ describe('Collection item dialog', () => {
     await dialog.get('select[name="Platform"]').setValue('9')
     await dialog.get('select[name="MediaType"]').setValue('1')
     expect(dialog.find('select[name="Platform"]').exists()).toBe(false)
-    expect(dialog.findAll('label > span')[2]!.text()).toBe(fi.itemForm.mediaFormat)
+    expect(
+      dialog.get('select[name="MediaFormat"]').element.closest('label')?.textContent,
+    ).toContain(fi.itemForm.mediaFormat)
     await dialog.get('select[name="MediaFormat"]').setValue('3')
     await dialog.get('form').trigger('submit')
     expect(request).toHaveBeenCalledWith('/api/collection', {
@@ -650,6 +838,7 @@ describe('Collection item dialog', () => {
       expect(dialog.findAll('label > span').map((label) => label.text())).toEqual([
         ...(!item ? [fi.itemForm.category] : []),
         fi.itemForm.name,
+        fi.bgg.classification,
         fi.itemForm.gameType,
         fi.itemForm.info,
       ])
@@ -663,6 +852,8 @@ describe('Collection item dialog', () => {
           Name: 'Lautapeli',
           MediaFormat: 5,
           Info: 'Muistiinpanot',
+          BoardGameKind: 1,
+          BaseGames: [],
         }),
       })
     },
@@ -700,6 +891,8 @@ describe('Collection item dialog', () => {
           Name: 'New tabletop game',
           MediaFormat: 99,
           Info: '',
+          BoardGameKind: 1,
+          BaseGames: [],
         }),
       })
     },
@@ -741,7 +934,14 @@ describe('Collection item dialog', () => {
     expect(request).toHaveBeenCalledWith('/api/collection', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ MediaType: 4, Name: 'Kohde', MediaFormat: 99, Info: '' }),
+      body: JSON.stringify({
+        MediaType: 4,
+        Name: 'Kohde',
+        MediaFormat: 99,
+        Info: '',
+        BoardGameKind: 1,
+        BaseGames: [],
+      }),
     })
   })
 
@@ -778,8 +978,9 @@ describe('Collection item dialog', () => {
     finish(new Response('{}', { status: 201 }))
     await vi.waitFor(() =>
       expect(useSnackbar().notice.value).toMatchObject({
-        messageKey: 'itemForm.saved',
+        messageKey: 'collection.notifications.saved.tvSeries',
         type: 'success',
+        params: { name: 'Elokuva' },
       }),
     )
     expect(wrapper!.get('button').attributes('aria-expanded')).toBe('false')
@@ -814,7 +1015,7 @@ describe('Collection item dialog', () => {
       await dialog.get('form').trigger('submit')
       await vi.waitFor(() =>
         expect(useSnackbar().notice.value).toMatchObject({
-          messageKey: 'itemForm.saved',
+          messageKey: 'collection.notifications.saved.movies',
           type: 'success',
         }),
       )

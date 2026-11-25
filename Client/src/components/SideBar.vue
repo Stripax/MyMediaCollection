@@ -1,10 +1,37 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import ToolbarTooltip from './ToolbarTooltip.vue'
 import type { CollectionCategory } from '../models/collection'
 
 const { t } = useI18n({ useScope: 'global' })
-const expanded = ref(true)
+const expanded = ref(false)
+const panel = ref<HTMLElement | null>(null)
+const toggle = ref<HTMLButtonElement | null>(null)
+function close(restoreFocus = true) {
+  if (!expanded.value) return
+  expanded.value = false
+  if (restoreFocus) nextTick(() => toggle.value?.focus())
+}
+
+function closeOutside(event: Event) {
+  if (
+    expanded.value &&
+    panel.value &&
+    event.target instanceof Node &&
+    !panel.value.contains(event.target)
+  )
+    close(false)
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', closeOutside, true)
+  document.addEventListener('click', closeOutside, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeOutside, true)
+  document.removeEventListener('click', closeOutside, true)
+})
 const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true })
 const emit = defineEmits<{ select: [category: CollectionCategory] }>()
 const selectedCategory = defineModel<CollectionCategory>({
@@ -14,6 +41,7 @@ const selectedCategory = defineModel<CollectionCategory>({
 function selectCategory(category: CollectionCategory) {
   selectedCategory.value = category
   emit('select', category)
+  close()
 }
 const categories = [
   { id: 'all', icon: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z' },
@@ -29,34 +57,43 @@ const categories = [
 
 <template>
   <aside
+    ref="panel"
     class="side-bar"
     :class="{ 'side-bar-collapsed': !expanded }"
     :aria-label="t('sidebar.categories')"
+    @keydown.esc.prevent="close()"
   >
     <div class="side-bar-heading">
       <span v-if="expanded" class="side-bar-title">{{ t('sidebar.categories') }}</span>
-      <button
-        class="side-bar-toggle"
-        type="button"
-        :aria-label="t(expanded ? 'sidebar.hide' : 'sidebar.show')"
-        :title="t(expanded ? 'sidebar.hide' : 'sidebar.show')"
-        :aria-expanded="expanded"
-        aria-controls="collection-categories"
-        @click="expanded = !expanded"
+      <ToolbarTooltip
+        v-slot="{ describedby }"
+        :text="t(expanded ? 'sidebar.hide' : 'sidebar.show')"
+        class="side-bar-toggle-tooltip"
       >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+        <button
+          ref="toggle"
+          class="side-bar-toggle"
+          type="button"
+          :aria-label="t(expanded ? 'sidebar.hide' : 'sidebar.show')"
+          :aria-describedby="describedby"
+          :aria-expanded="expanded"
+          aria-controls="collection-categories"
+          @click="expanded = !expanded"
         >
-          <path v-if="expanded" d="m14 6-6 6 6 6" />
-          <path v-else d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path v-if="expanded" d="m14 6-6 6 6 6" />
+            <path v-else d="m10 6 6 6-6 6" />
+          </svg>
+        </button>
+      </ToolbarTooltip>
     </div>
     <Transition name="sidebar-slide">
       <nav

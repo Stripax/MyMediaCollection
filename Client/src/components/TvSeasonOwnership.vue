@@ -38,22 +38,23 @@ const rows = computed(() => {
 })
 
 function selectAll() {
-  ownedSeasons.value = available.value.map(
-    (season) =>
-      ownedSeasons.value.find((owned) => owned.seasonNumber === season.seasonNumber) ?? {
-        seasonNumber: season.seasonNumber,
-        mediaFormat: props.defaultFormat,
-      },
-  )
+  ownedSeasons.value = available.value.map((season) => ({
+    seasonNumber: season.seasonNumber,
+    mediaFormat: props.defaultFormat,
+  }))
 }
 function setComplete(checked: boolean) {
   completeBox.value = checked
-  if (checked) selectAll()
 }
-watch(available, () => {
-  if (completeBox.value) selectAll()
-})
+watch(
+  [available, completeBox, () => props.defaultFormat],
+  () => {
+    if (completeBox.value) selectAll()
+  },
+  { immediate: true },
+)
 function toggleSeason(number: number, checked: boolean) {
+  if (completeBox.value) return
   if (checked)
     ownedSeasons.value = [
       ...ownedSeasons.value,
@@ -65,6 +66,7 @@ function toggleSeason(number: number, checked: boolean) {
   }
 }
 function setFormat(number: number, value: string) {
+  if (completeBox.value) return
   ownedSeasons.value = ownedSeasons.value.map((season) =>
     season.seasonNumber === number ? { ...season, mediaFormat: Number(value) } : season,
   )
@@ -110,6 +112,7 @@ function setFormat(number: number, value: string) {
           type="checkbox"
           :name="`OwnedSeason${season.seasonNumber}`"
           :checked="ownedSeasons.some((owned) => owned.seasonNumber === season.seasonNumber)"
+          :disabled="completeBox"
           @change="toggleSeason(season.seasonNumber, ($event.target as HTMLInputElement).checked)"
         />
         <span
@@ -122,7 +125,9 @@ function setFormat(number: number, value: string) {
       <select
         :name="`SeasonFormat${season.seasonNumber}`"
         :aria-label="t('tvOwnership.seasonFormat', { number: season.seasonNumber })"
-        :disabled="!ownedSeasons.some((owned) => owned.seasonNumber === season.seasonNumber)"
+        :disabled="
+          completeBox || !ownedSeasons.some((owned) => owned.seasonNumber === season.seasonNumber)
+        "
         :value="
           ownedSeasons.find((owned) => owned.seasonNumber === season.seasonNumber)?.mediaFormat ??
           defaultFormat

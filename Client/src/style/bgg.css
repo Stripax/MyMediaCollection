@@ -1,0 +1,106 @@
+.bgg-expansion-details {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.bgg-expansion-details dt {
+  font-weight: 600;
+}
+
+.bgg-expansion-details dd {
+  margin: 0.25rem 0 0;
+}
+
+.source-details > .bgg-expansion-details {
+  margin-bottom: 1rem;
+}
+
+.bgg-required-games {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.bgg-required-games a {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+
+.bgg-required-games a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.bgg-item-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.375rem;
+  margin-bottom: 0.25rem;
+}
+
+.bgg-expansion-badge,
+.bgg-base-game-badge,
+.bgg-other-game-badge,
+.bgg-required-game-badge {
+  --badge-color: var(--accent);
+  display: inline-block;
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--badge-color) 45%, var(--border));
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--badge-color) 12%, var(--surface));
+  color: var(--badge-color);
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bgg-base-game-badge {
+  --badge-color: #92400e;
+}
+
+.bgg-other-game-badge {
+  --badge-color: #7e22ce;
+}
+
+:root:is([data-theme='dark'], [data-theme='black']) .bgg-other-game-badge {
+  --badge-color: #d8b4fe;
+}
+
+span.bgg-required-game-badge {
+  cursor: default;
+}
+
+:root:is([data-theme='dark'], [data-theme='black']) .bgg-base-game-badge {
+  --badge-color: #fbbf24;
+}
+
+.bgg-required-game-badge {
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 200ms ease-in-out;
+}
+
+.bgg-required-game-badge:hover {
+  background: color-mix(in srgb, var(--badge-color) 20%, var(--surface));
+}
+
+.bgg-required-game-badge:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bgg-required-game-badge {
+    transition: none;
+  }
+}

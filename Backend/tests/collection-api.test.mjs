@@ -46,12 +46,36 @@ test('collection API stores and validates items in an isolated SQLite database',
   })
   database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/008-add-tv-season-ownership.sql', import.meta.url), 'utf8'))
   database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/009-add-igdb-source-url.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/010-add-bgg-metadata.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/011-add-bgg-expansion-details.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/012-add-board-game-classification.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/013-add-media-collections.sql', import.meta.url), 'utf8'))
+  const bggRequests = []
   const igdbRequests = []
   const tokenRequests = []
   let rejectNextToken = false
   const tmdbRequests = []
   const tmdbServer = createHttpServer((request, response) => {
     const address = new URL(request.url, 'http://localhost')
+    if (address.pathname.startsWith('/bgg/')) {
+      bggRequests.push({ path: address.pathname, query: Object.fromEntries(address.searchParams), authorization: request.headers.authorization })
+      response.setHeader('Content-Type', 'application/xml')
+      const query=address.searchParams.get('query')
+      const statuses={unauthorized:401,limited:429,pending:202,unavailable:503}
+      if (statuses[query]) { response.writeHead(statuses[query]); response.end(''); return }
+      if (query==='broken') { response.end('<items><bad>'); return }
+      if (query==='doctype') { response.end('<!DOCTYPE items [<!ENTITY leak SYSTEM "file:///not-readable">]><items>&leak;</items>'); return }
+      if (address.pathname.endsWith('/search')) {
+        if (query==='expansion') { response.end('<items><item type="boardgame" id="17"><name type="primary" value="Expansion"/></item><item type="boardgameexpansion" id="17"><name type="primary" value="Expansion"/></item></items>'); return }
+        const results=query==='empty'?[]:Array.from({length:query==='paginated'?21:1},(_,i)=>`<item type="boardgame" id="${13+i}"><name type="primary" value="CATAN &amp; friends"/><yearpublished value="1995"/></item>`)
+        response.end(`<items total="${results.length}">${results.join('')}</items>`); return
+      }
+      const id=Number(address.searchParams.get('id'))
+      if (id===404) { response.end('<items/>'); return }
+      if (id===17) { response.end('<items><item type="boardgameexpansion" id="17"><name type="primary" value="Expansion"/><link type="boardgameexpansion" id="13" value="Base &amp; game" inbound="true"/><link type="boardgameexpansion" id="18" value="Required expansion" inbound="true"/><link type="boardgameexpansion" id="13" value="Duplicate" inbound="true"/><link type="boardgameexpansion" id="19" value="Child expansion"/><link type="boardgameexpansion" id="20" value="Outbound false" inbound="false"/><link type="boardgameimplementation" id="21" value="Other relationship" inbound="true"/><link type="boardgameexpansion" id="-1" value="Invalid" inbound="true"/><link type="boardgameexpansion" id="17" value="Self" inbound="true"/><link type="boardgameexpansion" id="22" inbound="true"/></item></items>'); return }
+      if (id===23) { response.end('<items><item type="boardgameexpansion" id="23"><name type="primary" value="No requirements listed"/></item></items>'); return }
+      response.end(`<items><item type="boardgame" id="${id}"><name type="alternate" value="Alternate"/><name type="primary" value="CATAN &amp; friends"/><description>Game &amp;amp; description&amp;#10;&amp;lt;br/&amp;gt;Second line</description><yearpublished value="1995"/><image>${id===15?'https://untrusted.example/cover.jpg':'https://cf.geekdo-images.com/example/pic123.jpg'}</image><minplayers value="3"/><maxplayers value="4"/><playingtime value="90"/><minage value="10"/></item></items>`); return
+    }
     if (address.pathname === '/oauth' || address.pathname === '/igdb/games') {
       let body = '';
       request.on('data', chunk => { body += chunk });
@@ -82,6 +106,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     const localized = /\/(578|579|580)$/.test(address.pathname);
     if (address.pathname.endsWith('/580') && address.searchParams.get('language') === 'en-US') { response.writeHead(503); response.end('{}'); return; }
     const data = { id: localized ? Number(address.pathname.split('/').at(-1)) : 603, title: 'The Matrix', original_title: 'The Matrix', name: 'TV example', original_name: 'Original TV example', overview: 'TMDB overview', release_date: '1999-03-30', first_air_date: '2001-04-05', poster_path: '/matrix.jpg' }
+    if (/\/(701|702)$/.test(address.pathname)) { data.id=Number(address.pathname.split('/').at(-1)); data.title=`Movie ${data.id}`; data.name=`Series ${data.id}`; data.poster_path=`/cover-${data.id}.jpg`; }
     if (tv) Object.assign(data, {number_of_seasons:3,number_of_episodes:24,seasons:[{season_number:0,name:'Specials',episode_count:2},{season_number:1,name:'Season 1',episode_count:8},{season_number:2,name:'Season 2',episode_count:8},{season_number:3,name:'Season 3',episode_count:8}]});
     if (localized) { data.title = address.searchParams.get('language') === 'fi-FI' ? 'Tappajahai' : 'Jaws'; data.original_title = 'Jaws'; data.name = address.searchParams.get('language') === 'fi-FI' ? 'Fi-sarja' : 'English series'; data.original_name = 'Original series'; data.overview = address.searchParams.get('language') === 'fi-FI' ? 'Suomenkielinen yhteenveto' : 'English overview'; }
     response.end(JSON.stringify(address.pathname.includes('/search/') ? { page: 1, total_pages: 2, results: [{ ...data, ...(tv ? {} : { title: 'Matrix – hakutulos' }) }] } : data))
@@ -107,6 +132,9 @@ test('collection API stores and validates items in an isolated SQLite database',
       Tmdb__BaseUrl: `http://127.0.0.1:${tmdbServer.address().port}/3/`,
       Tmdb__ReadAccessToken: 'integration-test-token',
       Tmdb__ApiKey: '',
+      Bgg__ApiKey: 'bgg-integration-token',
+      Bgg__BaseUrl: `http://127.0.0.1:${tmdbServer.address().port}/bgg/`,
+      Bgg__RequestIntervalMilliseconds: '0',
       Igdb__ClientId: 'test-client-id',
       Igdb__ClientSecret: 'test-client-secret',
       Igdb__TokenUrl: `http://127.0.0.1:${tmdbServer.address().port}/oauth`,
@@ -149,6 +177,71 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(response.status, 200)
     assert.deepEqual(await response.json(), [])
   })
+  await t.test('manual movie and TV boxes store ordered contents and one shared format', async () => {
+    for (const mediaType of [1, 2]) {
+      const body = { name: 'Manual box', mediaType, mediaFormat: 2, isCollection: true,
+        collectionContents: [{ name: ' First ' }, { name: 'Second' }] }
+      const created = await post(body)
+      assert.equal(created.status, 201)
+      const item = await created.json()
+      assert.equal(item.isCollection, true)
+      assert.equal(item.isNameCustom, true)
+      assert.deepEqual(item.collectionContents.map(entry => entry.name), ['First', 'Second'])
+      const changed = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, mediaFormat: 3, collectionContents: [{ name: 'Second' }] }) })
+      assert.equal(changed.status, 200)
+      const saved = await changed.json()
+      assert.equal(saved.mediaFormat, 3)
+      assert.deepEqual(saved.collectionContents.map(entry => entry.name), ['Second'])
+      assert.deepEqual(saved.ownedSeasons, [])
+      const legacyEdit = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Renamed box', mediaType, mediaFormat: 2 }) })
+      assert.equal(legacyEdit.status, 200)
+      assert.equal((await legacyEdit.json()).collectionContents.length, 1)
+      assert.equal((await fetch(`${url}/${item.id}`, { method: 'DELETE' })).status, 204)
+      assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionContents WHERE CollectionItemId=?').get(item.id).count, 0)
+    }
+    for (const extra of [{}, { collectionContents: [] }, { collectionContents: [{ name: ' ' }] },
+      { collectionContents: [{ name: 'First' }], ownedSeasons: [{ seasonNumber: 1, mediaFormat: 2 }] }]) {
+      assert.equal((await post({ name: 'Invalid box', mediaType: 2, mediaFormat: 2, isCollection: true, ...extra })).status, 400)
+    }
+  })
+
+  await t.test('TMDB boxes import all members atomically and use the first member cover', async () => {
+    const importBox = (body) => fetch(url.replace('/collection', '/tmdb/import'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    const body = { tmdbId: 701, tmdbIds: [701, 702], language: 'fi-FI', useLocalizedName: true,
+      item: { name: 'Own box name', mediaType: 1, mediaFormat: 2, isCollection: true } }
+    const count = database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count
+    const response = await importBox(body)
+    assert.equal(response.status, 201)
+    const item = await response.json()
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count, count + 1)
+    assert.equal(item.name, 'Own box name')
+    assert.equal(item.isNameCustom, true)
+    assert.equal(item.tmdbId, 701)
+    assert.equal(item.posterPath, '/cover-701.jpg')
+    assert.deepEqual(item.collectionContents.map(entry => entry.tmdbId), [701, 702])
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM TmdbMetadata WHERE TmdbId IN (701,702)').get().count, 4)
+    const updated = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body.item, collectionContents: [...item.collectionContents].reverse() }) })
+    assert.equal(updated.status, 200)
+    const reordered = await updated.json()
+    assert.equal(reordered.posterPath, '/cover-702.jpg')
+    const forged = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body.item, collectionContents: [{ name: 'Forged', tmdbId: 999 }] }) })
+    assert.equal(forged.status, 400)
+    const persisted = (await (await fetch(url)).json()).find(entry => entry.id === item.id)
+    assert.deepEqual(persisted.collectionContents.map(entry => entry.tmdbId), [702, 701])
+    for (const tmdbIds of [[], [701, 701], [702, 701], [701, 0]])
+      assert.equal((await importBox({ ...body, tmdbIds })).status, 400)
+    const failed = await importBox({ ...body, tmdbIds: [701, 404] })
+    assert.equal(failed.status, 404)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count, count + 1)
+    assert.equal((await fetch(`${url}/${item.id}`, { method: 'DELETE' })).status, 204)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionContents WHERE CollectionItemId=?').get(item.id).count, 0)
+  })
   await t.test('persists enum numbers, Unicode and quoted text with a generated ID', async () => {
     const response = await post({ name: "  Yö — O'Brien  ", mediaType: 2, mediaFormat: 3, info: 'Line 1\nLine 2' })
     assert.equal(response.status, 201)
@@ -160,7 +253,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     const row = database.prepare('SELECT * FROM Collection WHERE Id = ?').get(item.id)
     assert.ok(Number.isFinite(Date.parse(item.createdAt)))
     assert.equal(Date.parse(item.createdAt), Date.parse(row.CreatedAt))
-    assert.deepEqual({ ...row }, { Id: item.id, Name: item.name, MediaType: 2, MediaFormat: 3, Platform: null, Store: null, Info: 'Line 1\nLine 2', CreatedAt: row.CreatedAt, UpdatedAt: null, UserId: null, TmdbMetadataId: null, IgdbMetadataId: null, IsPhysical: null, IsNameCustom: 1, IsCompleteBox: 0 })
+    assert.deepEqual({ ...row }, { Id: item.id, Name: item.name, MediaType: 2, MediaFormat: 3, Platform: null, Store: null, Info: 'Line 1\nLine 2', CreatedAt: row.CreatedAt, UpdatedAt: null, UserId: null, TmdbMetadataId: null, IgdbMetadataId: null, BggMetadataId: null, IsPhysical: null, IsNameCustom: 1, IsCompleteBox: 0, BoardGameKind: null, BaseGamesJson: null, IsCollection: 0 })
   })
   await t.test('supports every enum value and optional information', async () => {
     for (const mediaType of [1, 2]) {
@@ -178,7 +271,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(response.status, 200)
     const items = await response.json()
     assert.equal(items.length, Number(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count))
-    assert.deepEqual(items[0], { id, name: 'Manually added item', mediaType: 4, mediaFormat: null, platform: null, store: null, info: null, createdAt: null, updatedAt: null, userId: null, tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [] })
+    assert.deepEqual(items[0], { id, name: 'Manually added item', mediaType: 4, mediaFormat: null, platform: null, store: null, info: null, createdAt: null, updatedAt: null, userId: null, tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, bggMetadataId: null, bggId: null, bggImageUrl: null, boardGameKind: 1, baseGames: [], sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [], isCollection: false, collectionContents: [] })
     assert.ok(items.every((item, index) => index === 0 || items[index - 1].id > item.id))
     assert.equal(items.at(-1).name, "Yö — O'Brien")
     for (const item of items.slice(1)) {
@@ -392,12 +485,12 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.deepEqual(updated, {
       id: created.id, name: "Muokattu O'Brien", mediaType: 2, mediaFormat: 3, platform: null, store: null, info: 'Edited\nInfo',
       createdAt: created.createdAt, updatedAt: updated.updatedAt, userId: null,
-      tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [],
+      tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, bggMetadataId: null, bggId: null, bggImageUrl: null, boardGameKind: null, baseGames: [], sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [], isCollection: false, collectionContents: [],
     })
     assert.deepEqual({ ...database.prepare('SELECT * FROM Collection WHERE Id = ?').get(created.id) }, {
       Id: created.id, Name: "Muokattu O'Brien", MediaType: 2, MediaFormat: 3, Platform: null, Store: null, Info: 'Edited\nInfo',
       CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, UserId: null,
-      TmdbMetadataId: null, IgdbMetadataId: null, IsPhysical: null, IsNameCustom: 1, IsCompleteBox: 0,
+      TmdbMetadataId: null, IgdbMetadataId: null, BggMetadataId: null, IsPhysical: null, IsNameCustom: 1, IsCompleteBox: 0, BoardGameKind: null, BaseGamesJson: null, IsCollection: 0,
     })
     assert.deepEqual(database.prepare('SELECT * FROM Collection WHERE Id != ? ORDER BY Id').all(created.id), othersBefore)
   })
@@ -775,6 +868,215 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(missing.status,404)
     assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count,before)
     for (const params of ['query=x&page=501','query=','query=%0Ax']) assert.equal((await fetch(`${endpoint}/search?${params}`)).status,400)
+  })
+  await t.test('BGG searches encode names, authenticate only on the server and paginate cached XML results', async () => {
+    const endpoint=`http://127.0.0.1:${port}/api/bgg`
+    const search=await fetch(`${endpoint}/search?query=${encodeURIComponent('CATAN & friends')}`)
+    assert.equal(search.status,200)
+    const page=await search.json()
+    assert.equal(page.results[0].title,'CATAN & friends')
+    assert.equal(page.results[0].bggId,13)
+    assert.equal(page.results[0].yearPublished,1995)
+    assert.equal(bggRequests.at(-1).query.query,'CATAN & friends')
+    assert.equal(bggRequests.at(-1).authorization,'Bearer bgg-integration-token')
+    assert.equal(bggRequests.at(-1).query.type,'boardgame,boardgameexpansion')
+    const first=await (await fetch(`${endpoint}/search?query=paginated`)).json()
+    assert.equal(first.results.length,20)
+    assert.equal(first.hasNextPage,true)
+    const requests=bggRequests.length
+    const second=await (await fetch(`${endpoint}/search?query=paginated&page=2`)).json()
+    assert.equal(second.results.length,1)
+    assert.equal(second.hasNextPage,false)
+    assert.equal(bggRequests.length,requests)
+    assert.deepEqual((await (await fetch(`${endpoint}/search?query=empty`)).json()).results,[])
+  })
+  await t.test('BGG imports cache canonical details, preserve notes and links on edit, and share metadata', async () => {
+    const endpoint=`http://127.0.0.1:${port}/api/bgg`
+    const details=await (await fetch(`${endpoint}/details?bggId=13`)).json()
+    assert.equal(details.title,'CATAN & friends')
+    assert.equal(details.overview,'Game & description\n\nSecond line')
+    assert.equal(details.minPlayers,3)
+    assert.equal(details.maxPlayers,4)
+    assert.equal(details.playingTime,90)
+    assert.equal(details.minAge,10)
+    const requests=bggRequests.length
+    const importGame=(format=4,name='Own copy',id=13)=>fetch(`${endpoint}/import`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bggId:id,title:'Untrusted',imageUrl:'https://evil.test/image',item:{name,mediaType:4,mediaFormat:format,info:'Personal notes'}})})
+    const response=await importGame()
+    assert.equal(response.status,201)
+    const item=await response.json()
+    assert.equal(item.bggId,13)
+    assert.equal(item.bggImageUrl,'https://cf.geekdo-images.com/example/pic123.jpg')
+    assert.equal(item.sourceMetadata.source,'BGG')
+    assert.equal(item.sourceMetadata.title,'CATAN & friends')
+    assert.equal(item.sourceMetadata.yearPublished,1995)
+    assert.equal(item.sourceMetadata.minPlayers,3)
+    assert.equal(item.sourceMetadata.sourceUrl,'https://boardgamegeek.com/boardgame/13')
+    assert.equal(item.info,'Personal notes')
+    const card=await (await importGame(5)).json()
+    assert.equal(card.bggMetadataId,item.bggMetadataId)
+    assert.equal(card.mediaFormat,5)
+    assert.equal(bggRequests.length,requests)
+    const updated=await (await fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Renamed copy',mediaType:4,mediaFormat:99,info:'Changed notes'})})).json()
+    assert.equal(updated.bggMetadataId,item.bggMetadataId)
+    assert.equal(updated.bggImageUrl,item.bggImageUrl)
+    assert.deepEqual(updated.sourceMetadata,{...item.sourceMetadata,fetchedAt:updated.sourceMetadata.fetchedAt})
+    const listed=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+    assert.equal(listed.name,'Renamed copy')
+    assert.equal(listed.sourceMetadata.overview,details.overview)
+    assert.equal((await fetch(`${url}/${item.id}`,{method:'DELETE'})).status,204)
+    assert.ok(database.prepare('SELECT Id FROM BggMetadata WHERE Id=?').get(card.bggMetadataId))
+    const changed=await (await fetch(`${url}/${card.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Changed category',mediaType:1,mediaFormat:2})})).json()
+    assert.equal(changed.bggMetadataId,null)
+    assert.equal(changed.bggId,null)
+    assert.equal(changed.sourceMetadata,null)
+    assert.equal((await (await fetch(`${endpoint}/details?bggId=15`)).json()).imageUrl,null)
+    database.exec("CREATE TRIGGER BggImportFailure BEFORE INSERT ON Collection WHEN NEW.Name='Force BGG rollback' BEGIN SELECT RAISE(ABORT,'test failure'); END;")
+    assert.equal((await importGame(4,'Force BGG rollback',16)).status,503)
+    assert.equal(database.prepare('SELECT Id FROM BggMetadata WHERE BggId=16').get(),undefined)
+    database.exec('DROP TRIGGER BggImportFailure')
+  })
+  await t.test('BGG expansions store only inbound required games and preserve them on edits and reads', async () => {
+    const endpoint=`http://127.0.0.1:${port}/api/bgg`
+    const search=await (await fetch(`${endpoint}/search?query=expansion`)).json()
+    assert.equal(search.results.length,1)
+    assert.equal(search.results[0].isExpansion,true)
+    const base=await (await fetch(`${endpoint}/details?bggId=13`)).json()
+    assert.equal(base.isExpansion,false)
+    assert.deepEqual(base.requiredGames,[])
+    const details=await (await fetch(`${endpoint}/details?bggId=17`)).json()
+    const required=[{bggId:13,name:'Base & game',sourceUrl:'https://boardgamegeek.com/boardgame/13'},{bggId:18,name:'Required expansion',sourceUrl:'https://boardgamegeek.com/boardgame/18'}]
+    assert.equal(details.isExpansion,true)
+    assert.deepEqual(details.requiredGames,required)
+    const response=await fetch(`${endpoint}/import`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bggId:17,isExpansion:false,requiredGames:[],item:{name:'My expansion',mediaType:4,mediaFormat:5,info:'Keep notes'}})})
+    assert.equal(response.status,201)
+    const item=await response.json()
+    assert.equal(item.sourceMetadata.isExpansion,true)
+    assert.deepEqual(item.sourceMetadata.requiredGames,required)
+    const cached=database.prepare('SELECT IsExpansion,RequiredGamesJson FROM BggMetadata WHERE BggId=17').get()
+    assert.equal(cached.IsExpansion,1)
+    assert.equal(JSON.parse(cached.RequiredGamesJson).length,2)
+    const edited=await (await fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'My renamed expansion',mediaType:4,mediaFormat:4,info:'Own notes'})})).json()
+    assert.deepEqual(edited.sourceMetadata.requiredGames,required)
+    assert.equal(edited.sourceMetadata.isExpansion,true)
+    const listed=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+    assert.deepEqual(listed.sourceMetadata.requiredGames,required)
+    const unknown=await (await fetch(`${endpoint}/details?bggId=23`)).json()
+    assert.equal(unknown.isExpansion,true)
+    assert.deepEqual(unknown.requiredGames,[])
+    // A legacy row starts unknown and is filled without rewriting personal or source data.
+    database.prepare("UPDATE BggMetadata SET IsExpansion=NULL,RequiredGamesJson='[]',Title='Stored source title' WHERE BggId=17").run()
+    const filled=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+    assert.equal(filled.sourceMetadata.isExpansion,true)
+    assert.deepEqual(filled.sourceMetadata.requiredGames,required)
+    assert.equal(filled.sourceMetadata.title,'Stored source title')
+    assert.equal(filled.name,'My renamed expansion')
+    assert.equal(filled.info,'Own notes')
+    const requests=bggRequests.length
+    await fetch(url)
+    assert.equal(bggRequests.length,requests)
+    database.prepare("UPDATE BggMetadata SET BggId=404,IsExpansion=NULL WHERE BggId=17").run()
+    assert.equal((await fetch(url)).status,200)
+    const failedRequests=bggRequests.length
+    assert.equal((await fetch(url)).status,200)
+    assert.equal(bggRequests.length,failedRequests)
+    database.prepare('DELETE FROM Collection WHERE Id=?').run(item.id)
+  })
+  await t.test('BGG handles authentication, queued responses, invalid XML and validation without partial saves', async () => {
+    const endpoint=`http://127.0.0.1:${port}/api/bgg`
+    const before=database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count
+    for (const [query,status,code] of [['unauthorized',502,'bgg_credentials'],['limited',429,'bgg_rate_limited'],['pending',503,'bgg_pending'],['unavailable',429,'bgg_rate_limited'],['broken',502,'bgg_unavailable'],['doctype',502,'bgg_unavailable']]) {
+      const response=await fetch(`${endpoint}/search?query=${query}`)
+      assert.equal(response.status,status)
+      const problem=await response.json()
+      assert.equal(problem.code,code)
+      assert.ok(!JSON.stringify(problem).includes('bgg-integration-token'))
+    }
+    for (const params of ['query=','query=x&page=501','query=%0Ax']) assert.equal((await fetch(`${endpoint}/search?${params}`)).status,400)
+    for (const item of [{name:'Movie',mediaType:1,mediaFormat:2},{name:'Wrong format',mediaType:4,mediaFormat:1}]) {
+      assert.equal((await fetch(`${endpoint}/import`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bggId:13,item})})).status,400)
+    }
+    assert.equal((await fetch(`${endpoint}/details?bggId=0`)).status,400)
+    assert.equal((await fetch(`${endpoint}/details?bggId=404`)).status,404)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count,before)
+  })
+  await t.test('stores manual tabletop classification and parent references, resolves renames and preserves old callers', async () => {
+    const base=await (await post({name:'Manual base',mediaType:4,mediaFormat:4,boardGameKind:1})).json()
+    assert.equal(base.boardGameKind,1)
+    const response=await post({name:'Manual expansion',mediaType:4,mediaFormat:5,boardGameKind:2,baseGames:[{collectionItemId:base.id,name:'Forged name',bggId:99999},{name:'External base'}]})
+    assert.equal(response.status,201)
+    const item=await response.json()
+    assert.equal(item.boardGameKind,2)
+    assert.deepEqual(item.baseGames,[{collectionItemId:base.id,bggId:null,name:'Manual base'},{collectionItemId:null,bggId:null,name:'External base'}])
+    assert.equal(JSON.parse(database.prepare('SELECT BaseGamesJson FROM Collection WHERE Id=?').get(item.id).BaseGamesJson).length,2)
+    const edit=(id,body)=>fetch(`${url}/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    assert.equal((await edit(base.id,{name:'Renamed manual base',mediaType:4,mediaFormat:4})).status,200)
+    let listed=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+    assert.equal(listed.baseGames[0].name,'Renamed manual base')
+    const legacy=await (await edit(item.id,{name:'Edited expansion',mediaType:4,mediaFormat:5,info:'Personal notes'})).json()
+    assert.equal(legacy.boardGameKind,2)
+    assert.equal(legacy.baseGames.length,2)
+    const invalid=await edit(item.id,{name:'Must roll back',mediaType:4,mediaFormat:4,boardGameKind:2,baseGames:[{collectionItemId:item.id}]})
+    assert.equal(invalid.status,400)
+    assert.equal(database.prepare('SELECT Name FROM Collection WHERE Id=?').get(item.id).Name,'Edited expansion')
+    assert.equal((await fetch(`${url}/${base.id}`,{method:'DELETE'})).status,204)
+    listed=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+    assert.equal(listed.baseGames[0].collectionItemId,null)
+    assert.equal(listed.baseGames[0].name,'Manual base')
+    const other=await (await edit(item.id,{name:'Other tabletop item',mediaType:4,mediaFormat:99,boardGameKind:99,baseGames:[]})).json()
+    assert.equal(other.boardGameKind,99)
+    assert.deepEqual(other.baseGames,[])
+    const changed=await (await edit(item.id,{name:'Changed category',mediaType:1,mediaFormat:2})).json()
+    assert.equal(changed.boardGameKind,null)
+    assert.deepEqual(changed.baseGames,[])
+  })
+  await t.test('keeps BGG source defaults separate from user tabletop overrides and validates parent references', async () => {
+    const imported=await fetch(`http://127.0.0.1:${port}/api/bgg/import`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bggId:23,item:{name:'Own copy',mediaType:4,mediaFormat:4}})})
+    assert.equal(imported.status,201)
+    const item=await imported.json()
+    assert.equal(item.boardGameKind,2)
+    assert.equal(item.sourceMetadata.isExpansion,true)
+    const response=await fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Override',mediaType:4,mediaFormat:4,boardGameKind:1,baseGames:[]})})
+    assert.equal(response.status,200)
+    const changed=await response.json()
+    assert.equal(changed.boardGameKind,1)
+    assert.equal(changed.sourceMetadata.isExpansion,true)
+    assert.deepEqual(changed.baseGames,[])
+    const movie=await (await post({name:'Movie parent',mediaType:1,mediaFormat:2})).json()
+    const before=database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count
+    for(const body of [
+      {name:'Invalid enum',mediaType:4,mediaFormat:4,boardGameKind:3},
+      {name:'Movie classification',mediaType:1,mediaFormat:2,boardGameKind:1},
+      {name:'Not expansion',mediaType:4,mediaFormat:4,boardGameKind:1,baseGames:[{name:'Wrong'}]},
+      {name:'Missing parent',mediaType:4,mediaFormat:4,boardGameKind:2,baseGames:[{collectionItemId:999999}]},
+      {name:'Wrong parent category',mediaType:4,mediaFormat:4,boardGameKind:2,baseGames:[{collectionItemId:movie.id}]},
+      {name:'Empty parent',mediaType:4,mediaFormat:4,boardGameKind:2,baseGames:[{name:' '}]},
+    ]) assert.equal((await post(body)).status,400)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count,before)
+  })
+  await t.test('Other tabletop items can persist, edit and retain base game relationships without expansion classification', async () => {
+    const base=await (await post({name:'Reference base',mediaType:4,mediaFormat:4,boardGameKind:1})).json()
+    const response=await post({name:'Other related item',mediaType:4,mediaFormat:99,boardGameKind:99,baseGames:[{collectionItemId:base.id},{name:'Another base'}]})
+    assert.equal(response.status,201)
+    const item=await response.json()
+    assert.equal(item.boardGameKind,99)
+    assert.equal(item.baseGames[0].collectionItemId,base.id)
+    assert.equal(item.baseGames[0].name,'Reference base')
+    assert.equal(item.baseGames[1].name,'Another base')
+    const edit=body=>fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:item.name,mediaType:4,mediaFormat:99,...body})})
+    for(const kind of [2,99]) {
+      const changed=await edit({boardGameKind:kind})
+      assert.equal(changed.status,200)
+      const saved=await changed.json()
+      assert.equal(saved.boardGameKind,kind)
+      assert.deepEqual(saved.baseGames,item.baseGames)
+    }
+    const listed=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+    assert.equal(listed.boardGameKind,99)
+    assert.deepEqual(listed.baseGames,item.baseGames)
+    const renamed=await (await edit({baseGames:[{name:'New base name'}]})).json()
+    assert.equal(renamed.baseGames[0].name,'New base name')
+    const cleared=await (await edit({boardGameKind:1})).json()
+    assert.deepEqual(cleared.baseGames,[])
   })
   await t.test('forwards client /api requests through the Vite proxy', async () => {
     const { createServer: createViteServer } = await import('../../Client/node_modules/vite/dist/node/index.js')
