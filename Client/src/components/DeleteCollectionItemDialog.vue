@@ -27,7 +27,7 @@ const trigger = ref<{ $el: HTMLButtonElement } | null>(null)
 
 function finishClose() {
   transitioning.value = false
-  nextTick(() => trigger.value?.$el.focus())
+  nextTick(() => trigger.value?.$el.focus({ preventScroll: true }))
   if (!pendingDelete.value) return
   pendingDelete.value = false
   show(itemNoticeKey('deleted', deletedMediaType), 'success', { name: deletedName })

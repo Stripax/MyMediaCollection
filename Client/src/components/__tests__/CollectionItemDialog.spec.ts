@@ -41,6 +41,83 @@ afterEach(() => {
 })
 
 describe('Collection item dialog', () => {
+  it('adds a TMDB member through the existing search dialog without creating a separate item', async () => {
+    const movie = {
+      tmdbId: 703,
+      mediaType: 1,
+      language: 'fi-FI',
+      title: 'Third movie',
+      originalTitle: 'Third original',
+      overview: 'Full overview',
+      posterPath: '/third.jpg',
+      releaseDate: '2003-01-01',
+    }
+    const request = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.includes('/search?'))
+        return new Response(
+          JSON.stringify({
+            page: 1,
+            totalPages: 1,
+            results: [{ ...movie, tmdbId: 701, title: 'First' }, movie],
+          }),
+        )
+      if (url.includes('/details?')) return new Response(JSON.stringify(movie))
+      if (options?.method === 'PUT') return new Response('{"id":77}')
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('fi', {
+      id: 77,
+      name: 'Box',
+      mediaType: 1,
+      mediaFormat: 2,
+      info: null,
+      isCollection: true,
+      tmdbId: 701,
+      posterPath: '/first.jpg',
+      collectionContents: [{ name: 'First', tmdbId: 701, posterPath: '/first.jpg' }],
+    })
+    await dialog.get('.tmdb-add-button').trigger('click')
+    await vi.waitFor(() =>
+      expect(document.querySelector('.tmdb-dialog[data-state="open"]')).not.toBeNull(),
+    )
+    const search = new DOMWrapper(document.querySelector<HTMLElement>('.tmdb-dialog')!)
+    expect(search.find('input[name="IsCollection"]').exists()).toBe(false)
+    await search.get('input[name="TmdbQuery"]').setValue('Third')
+    await search.get('.tmdb-search-form').trigger('submit')
+    await vi.waitFor(() => expect(search.findAll('.tmdb-result')).toHaveLength(2))
+    expect((search.findAll('.tmdb-result')[0]!.element as HTMLButtonElement).disabled).toBe(true)
+    await search.findAll('.tmdb-result')[1]!.trigger('click')
+    await vi.waitFor(() => expect(search.text()).toContain('Full overview'))
+    expect(search.find('input[name="Name"], select[name="MediaFormat"]').exists()).toBe(false)
+    await vi.waitFor(() =>
+      expect((search.get('.tmdb-save-button').element as HTMLButtonElement).disabled).toBe(false),
+    )
+    await search.get('.tmdb-import-form').trigger('submit')
+    await vi.waitFor(() => expect(dialog.findAll('.media-collection-entry')).toHaveLength(2))
+    expect(dialog.attributes('data-state')).toBe('open')
+    expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe('Box')
+    expect(
+      (dialog.get('input[name="CollectionContent-1"]').element as HTMLInputElement).value,
+    ).toBe('Third movie')
+    expect(request.mock.calls.every(([, options]) => !options?.method)).toBe(true)
+    await vi.waitFor(() =>
+      expect(
+        dialog.get('.item-dialog-poster:not(.cover-fade-leave-active)').attributes('src'),
+      ).toContain('/third.jpg'),
+    )
+    await dialog.get('form').trigger('submit')
+    const saved = request.mock.calls.find(([, options]) => options?.method === 'PUT')!
+    expect(JSON.parse(saved[1]!.body as string)).toMatchObject({
+      CoverTmdbId: 703,
+      TmdbLanguage: 'fi-FI',
+      CollectionContents: [
+        { Name: 'First', TmdbId: 701 },
+        { Name: 'Third movie', TmdbId: 703 },
+      ],
+    })
+  })
+
   it('reopens a saved non-first cover and preserves it when saving other changes', async () => {
     const request = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
     vi.stubGlobal('fetch', request)

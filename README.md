@@ -591,8 +591,16 @@ interface language changes. Search also matches its member names.
 
 Imports fetch primary metadata for all members before saving; a failed lookup
 leaves no partial box. Changes to the item and contents share one transaction.
-Editing may retain or remove existing TMDB references; new source references
-are attached through TMDB import. Omitting collection fields preserves an
+In the editor, **Add an item to the collection** opens the same TMDB search
+dialog in member selection mode. It adds the selected title to the draft box,
+using the box's shared format, without creating a separate collection row.
+Existing TMDB members cannot be selected again. Canceling the editor discards
+the draft member. On save, the API fetches canonical metadata for new TMDB IDs
+in `collectionContents`, using `tmdbLanguage` (`fi-FI` or `en-US`, default `en-US`)
+and the other supported language. Metadata and box changes are saved together;
+a failed primary lookup leaves the box unchanged. Client-supplied posters and
+metadata are ignored when saving. No new database migration is needed.
+Omitting collection fields preserves an
 existing box for older API callers. Turning collection mode off clears the
 member list, and deleting a box cascades to its contents while keeping shared
 TMDB metadata.

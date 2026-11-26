@@ -16,7 +16,7 @@ const transitioning = ref(false)
 const trigger = ref<{ $el: HTMLButtonElement } | null>(null)
 function finishClose() {
   transitioning.value = false
-  nextTick(() => trigger.value?.$el.focus())
+  nextTick(() => trigger.value?.$el.focus({ preventScroll: true }))
 }
 </script>
 

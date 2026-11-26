@@ -106,7 +106,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     const localized = /\/(578|579|580)$/.test(address.pathname);
     if (address.pathname.endsWith('/580') && address.searchParams.get('language') === 'en-US') { response.writeHead(503); response.end('{}'); return; }
     const data = { id: localized ? Number(address.pathname.split('/').at(-1)) : 603, title: 'The Matrix', original_title: 'The Matrix', name: 'TV example', original_name: 'Original TV example', overview: 'TMDB overview', release_date: '1999-03-30', first_air_date: '2001-04-05', poster_path: '/matrix.jpg' }
-    if (/\/(701|702)$/.test(address.pathname)) { data.id=Number(address.pathname.split('/').at(-1)); data.title=`Movie ${data.id}`; data.name=`Series ${data.id}`; data.poster_path=`/cover-${data.id}.jpg`; data.overview=`Overview ${data.id} ${address.searchParams.get('language')}`; }
+    if (/\/(701|702|703)$/.test(address.pathname)) { data.id=Number(address.pathname.split('/').at(-1)); data.title=`Movie ${data.id}`; data.name=`Series ${data.id}`; data.poster_path=`/cover-${data.id}.jpg`; data.overview=`Overview ${data.id} ${address.searchParams.get('language')}`; }
     if (tv) Object.assign(data, {number_of_seasons:3,number_of_episodes:24,seasons:[{season_number:0,name:'Specials',episode_count:2},{season_number:1,name:'Season 1',episode_count:8},{season_number:2,name:'Season 2',episode_count:8},{season_number:3,name:'Season 3',episode_count:8}]});
     if (localized) { data.title = address.searchParams.get('language') === 'fi-FI' ? 'Tappajahai' : 'Jaws'; data.original_title = 'Jaws'; data.name = address.searchParams.get('language') === 'fi-FI' ? 'Fi-sarja' : 'English series'; data.original_name = 'Original series'; data.overview = address.searchParams.get('language') === 'fi-FI' ? 'Suomenkielinen yhteenveto' : 'English overview'; }
     response.end(JSON.stringify(address.pathname.includes('/search/') ? { page: 1, total_pages: 2, results: [{ ...data, ...(tv ? {} : { title: 'Matrix – hakutulos' }) }] } : data))
@@ -236,7 +236,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(reordered.posterPath, '/cover-702.jpg')
     const forged = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body.item, collectionContents: [{ name: 'Forged', tmdbId: 999 }] }) })
-    assert.equal(forged.status, 400)
+    assert.equal(forged.status, 502)
     const persisted = (await (await fetch(url)).json()).find(entry => entry.id === item.id)
     assert.deepEqual(persisted.collectionContents.map(entry => entry.tmdbId), [702, 701])
     assert.deepEqual(persisted.collectionContents.map(entry => entry.sourceMetadata.title), ['Movie 702', 'Movie 701'])
@@ -261,6 +261,32 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal((await fetch(`${url}/${item.id}`, { method: 'DELETE' })).status, 204)
     assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionContents WHERE CollectionItemId=?').get(item.id).count, 0)
   })
+  await t.test('attaches new TMDB members to an existing box atomically, including bilingual metadata and its selected cover', async () => {
+    const imported = await fetch(url.replace('/collection', '/tmdb/import'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tmdbId: 701, tmdbIds: [701], language: 'fi-FI', item: { name: 'Existing box', mediaType: 1, mediaFormat: 2, isCollection: true } }) })
+    assert.equal(imported.status, 201)
+    const item = await imported.json()
+    const count = database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count
+    const update = { name: 'Existing box', mediaType: 1, mediaFormat: 2, isCollection: true, tmdbLanguage: 'fi-FI', coverTmdbId: 703,
+      collectionContents: [{ name: 'First', tmdbId: 701 }, { name: 'Third', tmdbId: 703, posterPath: '/forged.jpg', sourceMetadata: { title: 'Forged' } }] }
+    const saved = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(update) })
+    assert.equal(saved.status, 200)
+    const result = await saved.json()
+    assert.equal(result.posterPath, '/cover-703.jpg')
+    assert.deepEqual(result.collectionContents.map(entry => entry.tmdbId), [701, 703])
+    assert.equal(result.collectionContents[1].sourceMetadata.title, 'Movie 703')
+    assert.deepEqual(result.collectionContents[1].sourceMetadata.localizedOverviews, { fi: 'Overview 703 fi-FI', en: 'Overview 703 en-US' })
+    const failed = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...update, name: 'Must not save', collectionContents: [...update.collectionContents, { name: 'Missing', tmdbId: 404 }] }) })
+    assert.equal(failed.status, 404)
+    const persisted = (await (await fetch(url)).json()).find(entry => entry.id === item.id)
+    assert.equal(persisted.name, 'Existing box')
+    assert.equal(persisted.tmdbId, 703)
+    assert.equal(persisted.collectionContents.length, 2)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count, count)
+    assert.equal((await fetch(`${url}/${item.id}`, { method: 'DELETE' })).status, 204)
+  })
+
   await t.test('returns saved full metadata for every TV collection member in both languages', async () => {
     const response = await fetch(url.replace('/collection', '/tmdb/import'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

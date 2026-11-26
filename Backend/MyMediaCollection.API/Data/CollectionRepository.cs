@@ -41,7 +41,22 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
         return await WithSourceMetadataAsync(connection, items.AsList(), cancellationToken);
     }
 
-    public async Task<CollectionItem?> UpdateAsync(long id, CreateCollectionItemRequest request, CancellationToken cancellationToken)
+    public async Task<IReadOnlySet<long>?> GetTmdbMemberIdsAsync(long id, CancellationToken cancellationToken)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        var rows = (await connection.QueryAsync<long?>(new CommandDefinition(
+            """
+            SELECT m.TmdbId FROM Collection c
+            LEFT JOIN CollectionContents members ON members.CollectionItemId=c.Id
+            LEFT JOIN TmdbMetadata m ON m.Id=members.TmdbMetadataId
+            WHERE c.Id=@Id;
+            """, new { Id = id }, cancellationToken: cancellationToken))).ToArray();
+        return rows.Length == 0 ? null : rows.OfType<long>().ToHashSet();
+    }
+
+    public async Task<CollectionItem?> UpdateAsync(long id, CreateCollectionItemRequest request, CancellationToken cancellationToken,
+        IReadOnlyList<TmdbMetadata>? newMembers = null, IReadOnlyList<TmdbMetadata>? translations = null)
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
@@ -76,8 +91,16 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
             transaction, cancellationToken: cancellationToken);
         var item = await connection.QuerySingleOrDefaultAsync<CollectionItem>(command);
         if (item is null) return null;
+        var attachments = new Dictionary<long, CollectionContent>();
+        foreach (var metadata in newMembers ?? [])
+        {
+            var metadataId = await SaveTmdbMetadataAsync(connection, metadata, cancellationToken, transaction);
+            attachments[metadata.TmdbId] = new CollectionContent { Name=metadata.Title, TmdbId=metadata.TmdbId, TmdbMetadataId=metadataId, PosterPath=metadata.PosterPath };
+        }
+        foreach (var translation in translations ?? [])
+            await SaveTmdbMetadataAsync(connection, translation, cancellationToken, transaction);
         item = await SaveBoardGameDetailsAsync(connection, transaction, item, request, cancellationToken);
-        item = await SaveCollectionContentsAsync(connection, transaction, item, request, cancellationToken, null);
+        item = await SaveCollectionContentsAsync(connection, transaction, item, request, cancellationToken, null, attachments);
         await SaveOwnershipAsync(connection, transaction, item, request, cancellationToken);
         var result = (await WithSourceMetadataAsync(connection, [item], cancellationToken, transaction))[0];
         transaction.Commit();
@@ -316,7 +339,8 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
     }
 
     private static async Task<CollectionItem> SaveCollectionContentsAsync(SqliteConnection connection, SqliteTransaction transaction, CollectionItem item,
-        CreateCollectionItemRequest request, CancellationToken cancellationToken, IReadOnlyList<TmdbMetadata>? canonical)
+        CreateCollectionItemRequest request, CancellationToken cancellationToken, IReadOnlyList<TmdbMetadata>? canonical,
+        IReadOnlyDictionary<long, CollectionContent>? attachments = null)
     {
         if (!item.IsCollection)
         {
@@ -351,6 +375,11 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
             foreach (var entry in request.CollectionContents ?? [])
             {
                 var saved = entry.TmdbId is long id ? existing.FirstOrDefault(row => row.TmdbId == id) : null;
+                if (saved is null && entry.TmdbId is long newId && attachments?.TryGetValue(newId, out var attached) == true)
+                {
+                    entries.Add(attached with { Name = entry.Name.Trim() });
+                    continue;
+                }
                 if (entry.TmdbId.HasValue && saved is null) throw new CollectionValidationException("Use TMDB import to attach new source titles.");
                 entries.Add(new CollectionContent { Name=entry.Name.Trim(), TmdbId=saved?.TmdbId, TmdbMetadataId=saved?.TmdbMetadataId, PosterPath=saved?.PosterPath });
             }

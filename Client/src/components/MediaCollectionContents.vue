@@ -102,13 +102,15 @@ function renameEntry(index: number, name: string) {
         </ToolbarTooltip>
       </div>
     </TransitionGroup>
-    <button
-      type="button"
-      :disabled="contents.length >= 100"
-      @click="contents = [...contents, { name: '' }]"
-    >
-      {{ t('mediaCollection.addEntry') }}
-    </button>
+    <slot name="add">
+      <button
+        type="button"
+        :disabled="contents.length >= 100"
+        @click="contents = [...contents, { name: '' }]"
+      >
+        {{ t('mediaCollection.addEntry') }}
+      </button>
+    </slot>
   </div>
 </template>
 <style src="../style/media-collection.css"></style>

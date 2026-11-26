@@ -8,7 +8,7 @@ namespace MyMediaCollection.API.Controllers;
 
 [ApiController]
 [Route("api/collection")]
-public sealed class CollectionController(CollectionRepository repository, TmdbTitleService titles, IgdbSourceService sources, BggExpansionService expansions, ILogger<CollectionController> logger) : ControllerBase
+public sealed class CollectionController(CollectionRepository repository, TmdbTitleService titles, IgdbSourceService sources, BggExpansionService expansions, TmdbClient tmdb, ILogger<CollectionController> logger) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<CollectionItem>>(StatusCodes.Status200OK)]
@@ -40,9 +40,32 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
     {
         try
         {
-            var item = await repository.UpdateAsync(id, request, cancellationToken);
+            var members = new List<TmdbMetadata>();
+            var translations = new List<TmdbMetadata>();
+            if (request.CollectionContents?.Any(entry => entry.TmdbId.HasValue) == true && request.MediaType is MediaType.Movie or MediaType.TvSeries && request.IsCollection != false)
+            {
+                var attached = await repository.GetTmdbMemberIdsAsync(id, cancellationToken);
+                if (attached is null) return NotFound();
+                foreach (var memberId in request.CollectionContents.Select(entry => entry.TmdbId).OfType<long>().Distinct().Where(memberId => !attached.Contains(memberId)))
+                {
+                    var metadata = await tmdb.DetailsAsync(request.MediaType, checked((int)memberId), request.TmdbLanguage, cancellationToken);
+                    members.Add(metadata);
+                    try
+                    {
+                        translations.Add(await tmdb.DetailsAsync(request.MediaType, checked((int)memberId),
+                            request.TmdbLanguage == "fi-FI" ? "en-US" : "fi-FI", cancellationToken));
+                    }
+                    catch (TmdbException) { /* A missing secondary translation must not block saving. */ }
+                }
+            }
+            var item = await repository.UpdateAsync(id, request, cancellationToken, members, translations);
             if (item is null) return NotFound();
             return Ok(item);
+        }
+        catch (TmdbException exception)
+        {
+            return Problem(statusCode: exception.StatusCode, title: "TMDB request failed.",
+                extensions: new Dictionary<string, object?> { ["code"] = exception.Code });
         }
         catch (CollectionValidationException exception) { return BadRequest(new { message = exception.Message }); }
         catch (SqliteException exception)

@@ -10,6 +10,8 @@ import TvSeasonOwnership from './TvSeasonOwnership.vue'
 import BoardGameFields from './BoardGameFields.vue'
 import MediaCollectionContents from './MediaCollectionContents.vue'
 import FadingCover from './FadingCover.vue'
+import CatalogImportDialog from './CatalogImportDialog.vue'
+import type { TmdbResult } from '../models/tmdb'
 import { snackbarElements, useSnackbar } from '../composables/useSnackbar'
 import {
   itemSourceUrl,
@@ -145,7 +147,7 @@ function finishClose() {
       trigger.value?.$el,
       document.querySelector<HTMLElement>('.brand'),
     ].find((element) => element?.isConnected)
-    target?.focus()
+    target?.focus({ preventScroll: true })
   })
   if (!pendingSave.value) {
     emit('closed')
@@ -166,6 +168,36 @@ function finishClose() {
 
 function optionLabel(option: { value: number; label: string }) {
   return option.value === otherOption ? t('common.other') : option.label
+}
+
+function addTmdbMember(member: TmdbResult) {
+  if (
+    collectionContents.value.length >= 100 ||
+    collectionContents.value.some((entry) => entry.tmdbId === member.tmdbId)
+  )
+    return
+  collectionContents.value = [
+    ...collectionContents.value,
+    {
+      name: member.title,
+      tmdbId: member.tmdbId,
+      posterPath: member.posterPath,
+      sourceMetadata: {
+        source: 'TMDB',
+        title: member.title,
+        originalTitle: member.originalTitle,
+        overview: member.overview,
+        releaseDate: member.releaseDate,
+        language: member.language,
+        platforms: [],
+        fetchedAt: null,
+        numberOfSeasons: member.numberOfSeasons,
+        numberOfEpisodes: member.numberOfEpisodes,
+        seasons: member.seasons,
+      },
+    },
+  ]
+  inspectedTmdbId.value = member.tmdbId
 }
 
 function prepareForm() {
@@ -273,6 +305,9 @@ async function save() {
           ...(hasMediaFormat.value && (isCollection.value || props.item?.isCollection)
             ? {
                 IsCollection: isCollection.value,
+                ...(collectionContents.value.some((entry) => entry.tmdbId)
+                  ? { TmdbLanguage: locale.value === 'fi' ? 'fi-FI' : 'en-US' }
+                  : {}),
                 ...(isCollection.value && inspectedContent.value?.tmdbId
                   ? { CoverTmdbId: inspectedContent.value.tmdbId }
                   : {}),
@@ -490,7 +525,21 @@ function reportError(message: string) {
                       v-model="collectionContents"
                       :inspected-tmdb-id="inspectedContent?.tmdbId"
                       @inspect="inspectedTmdbId = $event.tmdbId ?? null"
-                    />
+                    >
+                      <template v-if="item" #add>
+                        <CatalogImportDialog
+                          :category="form.MediaType === 2 ? 'tvSeries' : 'movies'"
+                          member-picker
+                          :disabled="collectionContents.length >= 100"
+                          :existing-tmdb-ids="
+                            collectionContents.flatMap((entry) =>
+                              entry.tmdbId ? [entry.tmdbId] : [],
+                            )
+                          "
+                          @member-selected="addTmdbMember"
+                        />
+                      </template>
+                    </MediaCollectionContents>
                     <BoardGameFields
                       v-if="isTabletopGame"
                       v-model:kind="selectedBoardKind"

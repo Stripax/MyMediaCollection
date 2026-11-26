@@ -15,6 +15,8 @@ public sealed class CreateCollectionItemRequest : IValidatableObject
     public bool? IsCollection { get; init; }
     [Range(1, int.MaxValue)]
     public long? CoverTmdbId { get; init; }
+    [RegularExpression("^(fi-FI|en-US)$")]
+    public string TmdbLanguage { get; init; } = "en-US";
     [MaxLength(100)]
     public IReadOnlyList<CollectionContent>? CollectionContents { get; init; }
     [MaxLength(1000)]

@@ -36,12 +36,18 @@ type CatalogSearchPage = {
 }
 
 const props = withDefaults(
-  defineProps<{ category: CollectionCategory; source?: 'tmdb' | 'igdb' | 'bgg' }>(),
+  defineProps<{
+    category: CollectionCategory
+    source?: 'tmdb' | 'igdb' | 'bgg'
+    memberPicker?: boolean
+    existingTmdbIds?: number[]
+    disabled?: boolean
+  }>(),
   { source: 'tmdb' },
 )
 const isIgdb = computed(() => props.source === 'igdb')
 const isBgg = computed(() => props.source === 'bgg')
-const emit = defineEmits<{ saved: [] }>()
+const emit = defineEmits<{ saved: []; 'member-selected': [member: TmdbResult] }>()
 const importFormId = useId()
 const { t, locale } = useI18n({ useScope: 'global' })
 function ct(key: string, params: Record<string, string | number> = {}) {
@@ -100,7 +106,12 @@ const selectedTmdbIds = computed(
   () => new Set(collectionSelections.value.map((entry) => entry.tmdbId)),
 )
 function collectionContains(result: CatalogResult) {
-  return isCollection.value && 'tmdbId' in result && selectedTmdbIds.value.has(result.tmdbId)
+  return (
+    'tmdbId' in result &&
+    (props.memberPicker
+      ? props.existingTmdbIds?.includes(result.tmdbId) === true
+      : isCollection.value && selectedTmdbIds.value.has(result.tmdbId))
+  )
 }
 const searched = ref(false)
 const searching = ref(false)
@@ -270,6 +281,7 @@ async function search(targetPage = 1) {
 }
 
 async function select(result: CatalogResult) {
+  if (props.memberPicker && collectionContains(result)) return
   if (isCollection.value && 'tmdbId' in result) {
     const selectedIndex = collectionSelections.value.findIndex(
       (entry) => entry.tmdbId === result.tmdbId,
@@ -305,7 +317,8 @@ async function loadDetails(result: CatalogResult, asMember = false) {
   if (asMember && 'tmdbId' in result && loadedMembers.has(result.tmdbId)) return
   if (
     !('bggId' in result) &&
-    (!('tmdbId' in result) || (mediaType.value !== 2 && result.overview.trim()))
+    (!('tmdbId' in result) ||
+      (!props.memberPicker && mediaType.value !== 2 && result.overview.trim()))
   )
     return
   request?.abort()
@@ -397,6 +410,11 @@ function updateCollectionPreview() {
 
 async function save() {
   if (!selected.value || saving.value || loadingDetails.value) return
+  if (props.memberPicker && 'tmdbId' in selected.value) {
+    emit('member-selected', selected.value)
+    open.value = false
+    return
+  }
   if (!name.value.trim()) {
     reportError('itemForm.nameRequired')
     return
@@ -488,9 +506,14 @@ function finishClose() {
     <Dialog.Trigger
       class="positive-button"
       :class="`${source}-add-button`"
-      :disabled="pendingSave || transitioning"
+      :disabled="
+        disabled ||
+        pendingSave ||
+        transitioning ||
+        (memberPicker && (existingTmdbIds?.length ?? 0) >= 100)
+      "
       @click="prepare"
-      >{{ ct('add') }}</Dialog.Trigger
+      >{{ memberPicker ? t('mediaCollection.addEntry') : ct('add') }}</Dialog.Trigger
     >
     <Teleport to="body">
       <Transition
@@ -524,7 +547,7 @@ function finishClose() {
                     </select>
                   </label>
                   <p v-else class="tmdb-category">{{ t(`sidebar.${category}`) }}</p>
-                  <label v-if="source === 'tmdb'" class="item-form-checkbox">
+                  <label v-if="source === 'tmdb' && !memberPicker" class="item-form-checkbox">
                     <input v-model="isCollection" name="IsCollection" type="checkbox" />
                     <span>{{ t('mediaCollection.label') }}</span>
                   </label>
@@ -558,6 +581,7 @@ function finishClose() {
                   <button
                     type="button"
                     class="tmdb-result"
+                    :disabled="memberPicker && collectionContains(result)"
                     :data-selected="collectionContains(result) || undefined"
                     :aria-pressed="isCollection ? collectionContains(result) : undefined"
                     @click="select(result)"
@@ -705,147 +729,152 @@ function finishClose() {
                       </div>
                     </Transition>
                   </div>
-                  <p v-if="isCollection && collectionSelections.length > 1">
-                    {{ t('mediaCollection.reorderHint') }}
-                  </p>
-                  <ol v-if="isCollection" ref="collectionList" class="media-collection-selection">
-                    <TransitionGroup name="collection-content">
-                      <li
-                        v-for="(entry, index) in collectionSelections"
-                        :key="entry.tmdbId"
-                        :data-collection-index="index"
-                        :class="{
-                          'collection-entry-dragging': draggedIndex === index,
-                          'collection-entry-inspected': entry.tmdbId === viewedMemberId,
-                          'collection-entry-drop-target':
-                            dropIndex === index && draggedIndex !== index,
-                        }"
-                        @dragover="dragOver(index, $event)"
-                        @drop="dropEntry(index, $event)"
-                      >
-                        <CollectionDragHandle
-                          :index="index"
-                          :count="collectionSelections.length"
-                          @start="startDrag(index, $event)"
-                          @end="endDrag"
-                          @move="moveEntry(index, $event)"
-                        />
-                        <button
-                          type="button"
-                          class="media-collection-entry-title collection-member-title"
-                          :aria-pressed="entry.tmdbId === viewedMemberId"
-                          :aria-label="t('mediaCollection.inspectItem', { name: entry.title })"
-                          @click="inspectCollectionEntry(entry)"
-                        >
-                          {{ entry.title }}
-                        </button>
-                        <button
-                          type="button"
-                          class="media-collection-remove"
-                          @click="removeCollectionEntry(index)"
-                        >
-                          {{ t('mediaCollection.remove') }}
-                        </button>
-                      </li>
-                    </TransitionGroup>
-                  </ol>
-                  <p v-if="isCollection">{{ t('mediaCollection.sharedFormat') }}</p>
-                  <button v-if="!isCollection" type="button" @click="selected = null">
+                  <button v-if="memberPicker" type="button" @click="selected = null">
                     {{ ct('changeSelection') }}
                   </button>
-                  <label class="item-form-field"
-                    ><span>{{ t('itemForm.name') }}</span
-                    ><input v-model="name" name="Name" required maxlength="300"
-                  /></label>
-                  <label v-if="!isIgdb" class="item-form-field"
-                    ><span>{{ t('itemForm.mediaFormat') }}</span
-                    ><select v-model.number="format" name="MediaFormat">
-                      <option
-                        v-for="option in isBgg ? boardGameFormats : mediaFormats"
-                        :key="option.value"
-                        :value="option.value"
-                      >
-                        {{
-                          isBgg
-                            ? t(option.label)
-                            : option.value === otherOption
-                              ? t('common.other')
-                              : option.label
-                        }}
-                      </option>
-                    </select></label
-                  >
-                  <template v-if="isIgdb">
-                    <p v-if="'platforms' in selected && selected.platforms.length">
-                      {{ ct('availablePlatforms') }}: {{ selected.platforms.join(', ') }}
+                  <template v-if="!memberPicker">
+                    <p v-if="isCollection && collectionSelections.length > 1">
+                      {{ t('mediaCollection.reorderHint') }}
                     </p>
+                    <ol v-if="isCollection" ref="collectionList" class="media-collection-selection">
+                      <TransitionGroup name="collection-content">
+                        <li
+                          v-for="(entry, index) in collectionSelections"
+                          :key="entry.tmdbId"
+                          :data-collection-index="index"
+                          :class="{
+                            'collection-entry-dragging': draggedIndex === index,
+                            'collection-entry-inspected': entry.tmdbId === viewedMemberId,
+                            'collection-entry-drop-target':
+                              dropIndex === index && draggedIndex !== index,
+                          }"
+                          @dragover="dragOver(index, $event)"
+                          @drop="dropEntry(index, $event)"
+                        >
+                          <CollectionDragHandle
+                            :index="index"
+                            :count="collectionSelections.length"
+                            @start="startDrag(index, $event)"
+                            @end="endDrag"
+                            @move="moveEntry(index, $event)"
+                          />
+                          <button
+                            type="button"
+                            class="media-collection-entry-title collection-member-title"
+                            :aria-pressed="entry.tmdbId === viewedMemberId"
+                            :aria-label="t('mediaCollection.inspectItem', { name: entry.title })"
+                            @click="inspectCollectionEntry(entry)"
+                          >
+                            {{ entry.title }}
+                          </button>
+                          <button
+                            type="button"
+                            class="media-collection-remove"
+                            @click="removeCollectionEntry(index)"
+                          >
+                            {{ t('mediaCollection.remove') }}
+                          </button>
+                        </li>
+                      </TransitionGroup>
+                    </ol>
+                    <p v-if="isCollection">{{ t('mediaCollection.sharedFormat') }}</p>
+                    <button v-if="!isCollection" type="button" @click="selected = null">
+                      {{ ct('changeSelection') }}
+                    </button>
                     <label class="item-form-field"
-                      ><span>{{ t('itemForm.platform') }}</span
-                      ><select v-model.number="platform" name="Platform" required>
-                        <option value="" disabled>{{ t('itemForm.choosePlatform') }}</option>
+                      ><span>{{ t('itemForm.name') }}</span
+                      ><input v-model="name" name="Name" required maxlength="300"
+                    /></label>
+                    <label v-if="!isIgdb" class="item-form-field"
+                      ><span>{{ t('itemForm.mediaFormat') }}</span
+                      ><select v-model.number="format" name="MediaFormat">
                         <option
-                          v-for="option in availablePlatforms"
+                          v-for="option in isBgg ? boardGameFormats : mediaFormats"
                           :key="option.value"
                           :value="option.value"
                         >
-                          {{ option.value === otherOption ? t('common.other') : option.label }}
-                        </option>
-                      </select></label
-                    >
-                    <label class="item-form-field"
-                      ><span>{{ t('itemForm.store') }}</span
-                      ><select
-                        v-model.number="store"
-                        name="Store"
-                        :disabled="isPhysical || platform === ''"
-                        :required="platform === pcPlatform && !isPhysical"
-                      >
-                        <option value="">
                           {{
-                            t(
-                              platform === pcPlatform && !isPhysical
-                                ? 'itemForm.chooseStore'
-                                : 'itemForm.chooseStoreOptional',
-                            )
+                            isBgg
+                              ? t(option.label)
+                              : option.value === otherOption
+                                ? t('common.other')
+                                : option.label
                           }}
                         </option>
-                        <option
-                          v-for="option in availableStores"
-                          :key="option.value"
-                          :value="option.value"
-                        >
-                          {{ option.value === otherOption ? t('common.other') : option.label }}
-                        </option>
                       </select></label
                     >
-                    <label class="item-form-checkbox">
-                      <input v-model="isPhysical" type="checkbox" name="IsPhysical" />
-                      <span>{{ t('itemForm.isPhysical') }}</span>
+                    <template v-if="isIgdb">
+                      <p v-if="'platforms' in selected && selected.platforms.length">
+                        {{ ct('availablePlatforms') }}: {{ selected.platforms.join(', ') }}
+                      </p>
+                      <label class="item-form-field"
+                        ><span>{{ t('itemForm.platform') }}</span
+                        ><select v-model.number="platform" name="Platform" required>
+                          <option value="" disabled>{{ t('itemForm.choosePlatform') }}</option>
+                          <option
+                            v-for="option in availablePlatforms"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ option.value === otherOption ? t('common.other') : option.label }}
+                          </option>
+                        </select></label
+                      >
+                      <label class="item-form-field"
+                        ><span>{{ t('itemForm.store') }}</span
+                        ><select
+                          v-model.number="store"
+                          name="Store"
+                          :disabled="isPhysical || platform === ''"
+                          :required="platform === pcPlatform && !isPhysical"
+                        >
+                          <option value="">
+                            {{
+                              t(
+                                platform === pcPlatform && !isPhysical
+                                  ? 'itemForm.chooseStore'
+                                  : 'itemForm.chooseStoreOptional',
+                              )
+                            }}
+                          </option>
+                          <option
+                            v-for="option in availableStores"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ option.value === otherOption ? t('common.other') : option.label }}
+                          </option>
+                        </select></label
+                      >
+                      <label class="item-form-checkbox">
+                        <input v-model="isPhysical" type="checkbox" name="IsPhysical" />
+                        <span>{{ t('itemForm.isPhysical') }}</span>
+                      </label>
+                    </template>
+                    <p v-if="loadingDetails" role="status">
+                      {{ isBgg ? ct('loadingDetails') : t('tvOwnership.loading') }}
+                    </p>
+                    <TvSeasonOwnership
+                      v-if="
+                        !isIgdb &&
+                        !isCollection &&
+                        mediaType === 2 &&
+                        'tmdbId' in selected &&
+                        !loadingDetails
+                      "
+                      :key="selected.tmdbId"
+                      v-model:complete-box="isCompleteBox"
+                      v-model:owned-seasons="ownedSeasons"
+                      :default-format="format"
+                      :season-count="selected.numberOfSeasons"
+                      :episode-count="selected.numberOfEpisodes"
+                      :seasons="selected.seasons"
+                    />
+                    <label class="item-form-field"
+                      ><span>{{ t('itemForm.info') }}</span
+                      ><textarea v-model="info" name="Info" rows="3" maxlength="10000" />
                     </label>
                   </template>
-                  <p v-if="loadingDetails" role="status">
-                    {{ isBgg ? ct('loadingDetails') : t('tvOwnership.loading') }}
-                  </p>
-                  <TvSeasonOwnership
-                    v-if="
-                      !isIgdb &&
-                      !isCollection &&
-                      mediaType === 2 &&
-                      'tmdbId' in selected &&
-                      !loadingDetails
-                    "
-                    :key="selected.tmdbId"
-                    v-model:complete-box="isCompleteBox"
-                    v-model:owned-seasons="ownedSeasons"
-                    :default-format="format"
-                    :season-count="selected.numberOfSeasons"
-                    :episode-count="selected.numberOfEpisodes"
-                    :seasons="selected.seasons"
-                  />
-                  <label class="item-form-field"
-                    ><span>{{ t('itemForm.info') }}</span
-                    ><textarea v-model="info" name="Info" rows="3" maxlength="10000" />
-                  </label>
                 </fieldset>
               </form>
               <p v-if="error" role="alert" class="item-form-error">{{ t(error) }}</p>
