@@ -36,7 +36,6 @@
 
 :is(.positive-button, .item-dialog-primary):disabled {
   opacity: 0.65;
-  cursor: wait;
 }
 
 @media (prefers-reduced-motion: reduce) {

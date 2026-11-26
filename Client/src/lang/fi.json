@@ -40,13 +40,16 @@
     "searchResults": "Hakutuloksia: {count}",
     "noMatches": "Hakua vastaavia kohteita ei löytynyt valitusta kategoriasta.",
     "actions": "Toiminnot",
+    "showInfo": "Näytä kohteen {name} lisätiedot",
+    "noInfo": "Ei lisätietoja.",
+    "noInfoTooltip": "Ei lisätietoja",
     "edit": "Muokkaa",
     "editItem": "Muokkaa kohdetta {name}",
     "delete": "Poista",
     "deleteItem": "Poista kohde {name}",
     "cancel": "Peruuta",
     "deleting": "Poistetaan…",
-    "deleted": "Kohde ”{name}” poistettiin kokoelmasta.",
+    "deleted": "Kohde {name} poistettiin kokoelmasta.",
     "deleteError": "Poistaminen epäonnistui. Yritä uudelleen.",
     "title": "Kokoelman kohteet",
     "loading": "Ladataan kokoelmaa…",
@@ -71,25 +74,25 @@
     },
     "notifications": {
       "saved": {
-        "all": "”{name}” lisättiin kokoelmaan.",
-        "movies": "Elokuva ”{name}” lisättiin kokoelmaan.",
-        "tvSeries": "TV-sarja ”{name}” lisättiin kokoelmaan.",
-        "videoGames": "Videopeli ”{name}” lisättiin kokoelmaan.",
-        "boardGames": "Lauta- tai korttipeli ”{name}” lisättiin kokoelmaan."
+        "all": "{name} lisättiin kokoelmaan.",
+        "movies": "Elokuva {name} lisättiin kokoelmaan.",
+        "tvSeries": "TV-sarja {name} lisättiin kokoelmaan.",
+        "videoGames": "Videopeli {name} lisättiin kokoelmaan.",
+        "boardGames": "Lauta- tai korttipeli {name} lisättiin kokoelmaan."
       },
       "updated": {
-        "all": "”{name}” muutokset tallennettiin.",
-        "movies": "Elokuvan ”{name}” muutokset tallennettiin.",
-        "tvSeries": "TV-sarjan ”{name}” muutokset tallennettiin.",
-        "videoGames": "Videopelin ”{name}” muutokset tallennettiin.",
-        "boardGames": "Lauta- tai korttipelin ”{name}” muutokset tallennettiin."
+        "all": "{name} muutokset tallennettiin.",
+        "movies": "Elokuvan {name} muutokset tallennettiin.",
+        "tvSeries": "TV-sarjan {name} muutokset tallennettiin.",
+        "videoGames": "Videopelin {name} muutokset tallennettiin.",
+        "boardGames": "Lauta- tai korttipelin {name} muutokset tallennettiin."
       },
       "deleted": {
-        "all": "”{name}” poistettiin kokoelmasta.",
-        "movies": "Elokuva ”{name}” poistettiin kokoelmasta.",
-        "tvSeries": "TV-sarja ”{name}” poistettiin kokoelmasta.",
-        "videoGames": "Videopeli ”{name}” poistettiin kokoelmasta.",
-        "boardGames": "Lauta- tai korttipeli ”{name}” poistettiin kokoelmasta."
+        "all": "{name} poistettiin kokoelmasta.",
+        "movies": "Elokuva {name} poistettiin kokoelmasta.",
+        "tvSeries": "TV-sarja {name} poistettiin kokoelmasta.",
+        "videoGames": "Videopeli {name} poistettiin kokoelmasta.",
+        "boardGames": "Lauta- tai korttipeli {name} poistettiin kokoelmasta."
       }
     }
   },
@@ -97,15 +100,16 @@
     "gameType": "Pelityyppi",
     "chooseGameType": "Valitse pelityyppi",
     "gameTypeRequired": "Valitse lautapeli, korttipeli tai muu peli.",
-    "store": "Kauppa",
-    "chooseStore": "Valitse pelikauppa",
+    "store": "Digitaalinen kauppa",
+    "chooseStore": "Valitse digitaalinen kauppa",
     "storeRequired": "Valitse digitaalisen PC-pelin kauppa.",
     "platform": "Alusta",
+    "currentPlatform": "{platform} (nykyinen)",
     "choosePlatform": "Valitse alusta",
     "platformRequired": "Valitse pelille alusta.",
     "editTitle": "Muokkaa kokoelman kohdetta",
     "editDescription": "Muokkaa kohteen tietoja ja tallenna muutokset.",
-    "updated": "Kohteen ”{name}” muutokset tallennettiin.",
+    "updated": "Kohteen {name} muutokset tallennettiin.",
     "notFound": "Kohdetta ei enää löydy. Sulje ikkuna ja päivitä kokoelma.",
     "chooseFormat": "Valitse median tyyppi",
     "title": "Kokoelman kohde",
@@ -113,7 +117,7 @@
     "add": "Lisää",
     "saveChanges": "Tallenna muutokset",
     "saving": "Tallennetaan…",
-    "saved": "Kohde ”{name}” lisättiin kokoelmaan.",
+    "saved": "Kohde {name} lisättiin kokoelmaan.",
     "nameRequired": "Anna kohteelle nimi.",
     "validationError": "Tarkista nimi, kategoria, formaatti tai alusta sekä PC-pelin kauppa. Lisätietojen enimmäispituus on 10 000 merkkiä.",
     "saveError": "Tallennus epäonnistui. Tarkista yhteys ja yritä uudelleen.",
@@ -123,7 +127,7 @@
     "info": "Lisätiedot",
     "close": "Peruuta",
     "isPhysical": "Fyysinen kopio",
-    "chooseStoreOptional": "Valitse kauppa (valinnainen)"
+    "chooseStoreOptional": "Valitse digitaalinen kauppa (valinnainen)"
   },
   "sidebar": {
     "categories": "Kategoriat",
@@ -153,7 +157,7 @@
   "language": "Kieli",
   "selectLanguage": "Valitse kieli",
   "darkMode": "Tumma tila",
-  "title": "Minun Kokoelmani",
+  "title": "Kokoelmani",
   "header": "Tervetuloa sovellukseen \"Minun Kokoelmani\".",
   "description": "Tämä on sovellus, jonka avulla voit hallita ja listata kokoelmasi helposti.\nSovelluksen tarkoitus on toimia apurina kokoelman hallinnassa ja tarjota käyttäjälle selkeä näkymä kokoelmaan liittyvistä tiedoista.\nSovellus on harjoitusprojekti, joka on toteutettu Vue 3 -kehitysympäristössä ja hyödyntää Composition API:ta.\nKäyttäjä voi lisätä, muokata ja poistaa kohteita kokoelmastaan sekä selata niitä eri näkymissä.\nSovellus tukee useita kieliä ja tarjoaa mahdollisuuden vaihtaa kieltä käyttöliittymässä.\nLisäksi sovellus sisältää tumman tilan, joka voidaan aktivoida käyttäjän mieltymyksen mukaan.\n\nSovelluksen luonnissa on käytetty ChatGPT tekoälyä.",
   "tmdb": {
@@ -169,7 +173,7 @@
     "select": "Valitse",
     "noResults": "Hakutuloksia ei löytynyt. Kokeile toista nimeä tai lisää kohde manuaalisesti.",
     "noPoster": "Ei kansikuvaa",
-    "noOverview": "Kuvausta ei ole saatavilla tällä kielellä.",
+    "noOverview": "Kuvausta ei ole saatavilla.",
     "viewSource": "Näytä TMDB:ssä",
     "changeSelection": "Vaihda valittua teosta",
     "pages": "Hakutulosten sivut",
@@ -226,7 +230,7 @@
     "overview": "Yhteenveto",
     "fetchedAt": "Tiedot haettu",
     "unknown": "Ei tiedossa",
-    "noOverview": "Yhteenvetoa ei ole saatavilla.",
+    "noOverview": "Kuvausta ei ole saatavilla.",
     "finnish": "Suomi",
     "english": "Englanti",
     "openBgg": "Avaa BGG:ssä"
@@ -291,6 +295,12 @@
   },
   "mediaCollection": {
     "label": "Kokoelma",
+    "selected": "Valittu",
+    "details": "Tiedot",
+    "info": "Tiedot",
+    "inspectItem": "Näytä kohteen {name} TMDB-tiedot",
+    "reorder": "Siirrä kohdetta {number} raahaamalla tai ylös/alas-nuolinäppäimillä",
+    "reorderHint": "Voit muuttaa järjestystä raahaamalla tartuntakahvasta tai sen nuolinäppäimillä. Ensimmäisen kohteen kuva on kokoelman kansikuva.",
     "sharedFormat": "Kaikki kokoelman kohteet käyttävät samaa formaattia. Ensimmäisen TMDB-kohteen kuva toimii kansikuvana.",
     "entryName": "Kohteen {number} nimi",
     "remove": "Poista kokoelmasta",

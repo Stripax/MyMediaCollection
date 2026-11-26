@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useSnackbar } from '../composables/useSnackbar'
 import CollectionTable from '../components/CollectionTable.vue'
 import type { CollectionCategory, CollectionItem } from '../models/collection'
+import { useCollectionRefresh } from '../composables/useCollectionRefresh'
 
 const { t } = useI18n({ useScope: 'global' })
 const { show, dismissMessage } = useSnackbar()
@@ -36,6 +37,7 @@ async function loadCollection() {
 }
 
 onMounted(loadCollection)
+watch(useCollectionRefresh().revision, loadCollection)
 onBeforeUnmount(() => activeRequest?.abort())
 </script>
 

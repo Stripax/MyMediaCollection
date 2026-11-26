@@ -68,10 +68,14 @@ Xbox Store = 9 and PlayStation Store = 10. Other remains 99.
 }
 ```
 
-The store is shown for every video game. It is optional for console games and
-physical PC copies; digital PC games still require it. Other categories must
-omit `store` or set it to null. Switching between game platforms preserves the
-selected store; changing to another category omits it when saving. The table
+The Digital store field is shown for every video game. It is optional for
+console games; digital PC games require it. Selecting a physical copy clears
+and disables the field. Other categories omit `store` or set it to null.
+The forms offer Xbox Store for Xbox platforms, PlayStation Store for PlayStation
+platforms, and PC stores (Steam through itch.io) for PC. Other remains available
+for each platform; unlisted platforms use Other, while the Other platform allows
+the full store list. Changing platform clears an incompatible selected store;
+changing to another category omits it when saving. The table
 displays a selected store alongside any platform, for example `PC · Steam` or
 `PlayStation 5 · PlayStation Store`.
 The API requires a defined platform for video games and rejects a disc format
@@ -563,6 +567,19 @@ The **Collection** checkbox before Name enables a movie or TV box. A box is one
 collection row with its own name and one shared disc format. Manual creation
 accepts `isCollection: true` and `collectionContents: [{ "name": "First movie" }]`.
 The editor supports changing member names and adding or removing members.
+In TMDB import and the editor, drag a member's handle to reorder the contents,
+or focus the handle and use the up/down arrow keys. The first member supplies
+the cover and TMDB link; the ordered contents are saved with the box.
+Click a member's name in TMDB import, or its **Details** button in the editor,
+to inspect that member's TMDB information without changing the order.
+In the editor, the inspected member also supplies the preview cover, which fades
+when the selection changes. Saving sends `coverTmdbId` with the contents and
+uses that member's cover and source link in the table. Reopening the editor
+retains this choice. The cover must belong to a saved member; omitting
+`coverTmdbId` retains the first-member behavior for older API callers.
+Each member's saved metadata, including Finnish and English overviews and TV
+season/episode counts, is returned in `collectionContents[].sourceMetadata`.
+Reordering the contents keeps this information attached to the correct member.
 TV boxes do not use individual season ownership or per-season formats.
 
 TMDB imports accept `tmdbIds: [701, 702]` alongside `tmdbId: 701` and

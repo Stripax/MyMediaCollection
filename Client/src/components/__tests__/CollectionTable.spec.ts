@@ -65,6 +65,40 @@ afterEach(() => {
 })
 
 describe('Collection table in the application', () => {
+  it('shows the full notes in an info dialog and closes it with Cancel or an outside click', async () => {
+    const notes = 'Ensimmäinen rivi\nToinen rivi <b>tekstinä</b>'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([{ ...items[3]!, info: notes }])))
+    const { app } = await mountApp()
+    expect(app.find('.collection-info').exists()).toBe(false)
+    expect(app.findAll('th').map((header) => header.text())).toEqual([
+      fi.itemForm.name,
+      fi.collection.category,
+      fi.collection.actions,
+    ])
+    const button = app.get('.collection-info-button')
+    await button.trigger('click')
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
+    let dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!)
+    expect(dialog.get('.collection-info-text').text()).toBe(notes)
+    expect(dialog.get('.collection-info-dialog-title').text()).toBe(fi.itemForm.info)
+    expect(dialog.find('b').exists()).toBe(false)
+    expect(dialog.find('input, textarea, select').exists()).toBe(false)
+    expect(dialog.findAll('button')).toHaveLength(1)
+    await dialog.get('.item-dialog-cancel').trigger('click')
+    await flushPromises()
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
+    await vi.waitFor(() => expect((button.element as HTMLButtonElement).disabled).toBe(false))
+    await button.trigger('click')
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
+    dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!)
+    await vi.waitFor(() => expect((button.element as HTMLButtonElement).disabled).toBe(false))
+    const outside = new DOMWrapper(dialog.element.closest('.item-dialog-positioner')!)
+    await outside.trigger('pointerdown', { button: 0, pointerType: 'mouse' })
+    await outside.trigger('pointerup', { button: 0, pointerType: 'mouse' })
+    await outside.trigger('click')
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
+  })
+
   it('changes automatic TMDB names with the UI language and searches both languages while preserving custom names', async () => {
     const translated: CollectionItem[] = [
       {
@@ -116,7 +150,18 @@ describe('Collection table in the application', () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
     expect(rowNames(app)).toEqual(['Lautapeli', 'Videopeli', 'TV-sarja', 'Elokuva'])
-    expect(app.findAll('tbody tr')[0]!.text()).toContain('—')
+    expect(app.findAll('tbody tr')[0]!.find('.collection-info-button').exists()).toBe(true)
+    expect(
+      (app.findAll('tbody tr')[0]!.get('.collection-info-button').element as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
+    expect(
+      (app.findAll('tbody tr')[3]!.get('.collection-info-button').element as HTMLButtonElement)
+        .disabled,
+    ).toBe(false)
+    expect(app.findAll('tbody tr')[3]!.get('.collection-row-actions button').classes()).toContain(
+      'collection-info-button',
+    )
     expect(app.findAll('tbody tr')[3]!.text()).toContain('4K UHD Blu-ray')
     expect(app.get('th').text()).toBe(fi.itemForm.name)
     expect(app.find('caption').exists()).toBe(false)
@@ -133,8 +178,6 @@ describe('Collection table in the application', () => {
     expect(app.findAll('th').map((header) => header.text())).toEqual([
       en.itemForm.name,
       en.collection.category,
-      en.itemForm.mediaFormat,
-      en.itemForm.info,
       en.collection.actions,
     ])
     expect(app.findAll('td.collection-category').map((cell) => cell.text())).toEqual([
@@ -211,24 +254,24 @@ describe('Collection table in the application', () => {
     )
     const { app, i18n } = await mountApp()
     expect(app.findAll('tbody tr')[1]!.get('.game-platform-badge').text()).toBe('PlayStation 5')
-    expect(app.findAll('tbody tr')[1]!.get('.collection-format').text()).toBe('—')
+    expect(app.find('.collection-format').exists()).toBe(false)
     expect(app.findAll('tbody tr')[3]!.get('.media-format-badge').text()).toBe('4K UHD Blu-ray')
     for (const category of [1, 2]) {
       await app.findAll('.side-bar-category')[category]!.trigger('click')
       await flushPromises()
       await settleRows()
       expect(app.find('th.collection-format').exists()).toBe(false)
-      expect(app.findAll('th')).toHaveLength(3)
+      expect(app.findAll('th')).toHaveLength(2)
       expect(app.find('.media-format-badge').exists()).toBe(true)
       await app.get('input[type="search"]').setValue('No matching item')
-      expect(app.get('.collection-empty').attributes('colspan')).toBe('3')
+      expect(app.get('.collection-empty').attributes('colspan')).toBe('2')
       await app.get('input[type="search"]').setValue('')
     }
     await app.findAll('.side-bar-category')[3]!.trigger('click')
     await flushPromises()
     await settleRows()
     expect(app.find('th.collection-format').exists()).toBe(false)
-    expect(app.findAll('th')).toHaveLength(4)
+    expect(app.findAll('th')).toHaveLength(3)
     expect(app.findAll('tbody tr')[0]!.get('.game-platform-badge').text()).toBe('PlayStation 5')
     i18n.global.locale.value = 'en'
     await app.vm.$nextTick()
@@ -265,7 +308,7 @@ describe('Collection table in the application', () => {
       'Unknown',
     ])
     await app.get('input[type="search"]').setValue('Not present')
-    expect(app.get('.collection-empty').attributes('colspan')).toBe('4')
+    expect(app.get('.collection-empty').attributes('colspan')).toBe('3')
   })
 
   it('translates Other formats, platforms and stores in the table', async () => {
@@ -284,11 +327,7 @@ describe('Collection table in the application', () => {
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(otherItems)))
     const { app, i18n } = await mountApp()
-    expect(app.findAll('tbody tr').map((row) => row.get('.collection-format').text())).toEqual([
-      '—',
-      '—',
-      '—',
-    ])
+    expect(app.find('.collection-format').exists()).toBe(false)
     expect(app.get('.media-format-badge').text()).toBe('Muu')
     expect(app.findAll('.game-platform-badge').map((tag) => tag.text())).toEqual([
       'Muu',
@@ -296,11 +335,7 @@ describe('Collection table in the application', () => {
     ])
     i18n.global.locale.value = 'en'
     await app.vm.$nextTick()
-    expect(app.findAll('tbody tr').map((row) => row.get('.collection-format').text())).toEqual([
-      '—',
-      '—',
-      '—',
-    ])
+    expect(app.find('.collection-format').exists()).toBe(false)
     expect(app.get('.media-format-badge').text()).toBe('Other')
     expect(app.findAll('.game-platform-badge').map((tag) => tag.text())).toEqual([
       'Other',
@@ -359,21 +394,17 @@ describe('Collection table in the application', () => {
     )
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(legacyItems)))
     const { app } = await mountApp()
-    expect(app.findAll('tbody tr')[0]!.get('.collection-format').text()).toBe(
-      fi.gameTypes.boardGame,
-    )
+    expect(app.findAll('tbody tr')[0]!.get('.bgg-format-badge').text()).toBe(fi.gameTypes.boardGame)
     await app.findAll('.side-bar-category')[4]!.trigger('click')
     await flushPromises()
     await settleRows()
     expect(app.findAll('th').map((header) => header.text())).toEqual([
       fi.itemForm.name,
-      fi.itemForm.mediaFormat,
-      fi.itemForm.info,
       fi.collection.actions,
     ])
-    expect(app.findAll('tbody tr')[0]!.findAll('td')).toHaveLength(4)
+    expect(app.findAll('tbody tr')[0]!.findAll('td')).toHaveLength(2)
     await app.get('input[type="search"]').setValue('Ei löydy')
-    expect(app.get('.collection-empty').attributes('colspan')).toBe('4')
+    expect(app.get('.collection-empty').attributes('colspan')).toBe('2')
   })
 
   it('displays translated board, card and other game types while leaving legacy items unassigned', async () => {
@@ -385,25 +416,36 @@ describe('Collection table in the application', () => {
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(tabletopItems)))
     const { app, i18n } = await mountApp()
-    expect(app.findAll('tbody tr').map((row) => row.get('.collection-format').text())).toEqual([
-      'Lautapeli',
-      'Korttipeli',
-      'Muu peli',
-      '—',
-    ])
+    expect(
+      app
+        .findAll('tbody tr')
+        .map((row) =>
+          row.find('.bgg-format-badge').exists() ? row.get('.bgg-format-badge').text() : '—',
+        ),
+    ).toEqual(['Lautapeli', 'Korttipeli', 'Muu peli', '—'])
+    expect(app.find('.collection-format').exists()).toBe(false)
+    expect(app.findAll('thead th')).toHaveLength(3)
+    expect(
+      app.findAll('.bgg-format-badge').map((tag) => tag.attributes('data-game-format')),
+    ).toEqual(['4', '5', '99'])
+    expect(app.get('.collection-name-label .bgg-format-badge').attributes('aria-label')).toBe(
+      'Pelityyppi: Lautapeli',
+    )
     await app.findAll('.side-bar-category')[4]!.trigger('click')
     await flushPromises()
     await settleRows()
     expect(app.get('main h1').text()).toBe('Lauta- ja korttipelit')
+    expect(app.findAll('thead th')).toHaveLength(2)
     i18n.global.locale.value = 'en'
     await app.vm.$nextTick()
     expect(app.get('main h1').text()).toBe('Board and card games')
-    expect(app.findAll('tbody tr').map((row) => row.get('.collection-format').text())).toEqual([
-      'Board game',
-      'Card game',
-      'Other game',
-      '—',
-    ])
+    expect(
+      app
+        .findAll('tbody tr')
+        .map((row) =>
+          row.find('.bgg-format-badge').exists() ? row.get('.bgg-format-badge').text() : '—',
+        ),
+    ).toEqual(['Board game', 'Card game', 'Other game', '—'])
   })
 
   it('places a category-specific add button beside search and prefills the category', async () => {
@@ -560,8 +602,10 @@ describe('Collection table in the application', () => {
     expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe(added.name)
     await dialog.get('form').trigger('submit')
     await vi.waitFor(() => expect(rowNames(app)).toContain(added.name))
-    expect(document.querySelector('.snackbar--success')?.textContent).toContain(
-      fi.collection.notifications.saved.movies.replace('{name}', added.name),
+    await vi.waitFor(() =>
+      expect(document.querySelector('.snackbar--success')?.textContent).toContain(
+        fi.collection.notifications.saved.movies.replace('{name}', added.name),
+      ),
     )
   })
 

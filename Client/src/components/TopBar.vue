@@ -8,8 +8,9 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import LanguageSelector from './LanguageSelector.vue'
 
-// Language preference is stored in localStorage, but if it's not available, the default is English.
+// Saved choices take precedence over the device defaults.
 const { t, locale: language } = useI18n({ useScope: 'global' })
+const brandIcon = `${import.meta.env.BASE_URL}favicon.svg`
 const emit = defineEmits<{
   'theme-change': [theme: string]
   'matrix-rain-change': [enabled: boolean]
@@ -47,9 +48,31 @@ function handleRainKeydown(event: KeyboardEvent) {
     event.stopPropagation()
 }
 
-language.value = readPreference('mmc-language') === 'fi' ? 'fi' : 'en'
+function deviceLanguage() {
+  try {
+    const preferred = navigator.languages?.[0] || navigator.language
+    return typeof preferred === 'string' && /^fi(?:-|$)/i.test(preferred.trim()) ? 'fi' : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
+function deviceTheme() {
+  try {
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
+const savedLanguage = readPreference('mmc-language')
+language.value = savedLanguage === 'fi' || savedLanguage === 'en' ? savedLanguage : deviceLanguage()
 const savedTheme = readPreference('mmc-theme')
-const theme = ref(savedTheme === 'dark' || savedTheme === 'black' ? savedTheme : 'light')
+const theme = ref(
+  savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'black'
+    ? savedTheme
+    : deviceTheme(),
+)
 const matrixRain = ref(readPreference('mmc-matrix-rain') !== 'false')
 const rainDefaults = { speed: 100, brightness: 55, density: 100 }
 const rainSettings = reactive({
@@ -105,7 +128,10 @@ watch(
 
 <template>
   <header class="top-bar">
-    <RouterLink class="brand" :to="{ name: 'home' }">{{ t('title') }}</RouterLink>
+    <RouterLink class="brand" :to="{ name: 'home' }">
+      <img :src="brandIcon" class="brand-icon" width="32" height="32" alt="" aria-hidden="true" />
+      <span>{{ t('title') }}</span>
+    </RouterLink>
 
     <div class="settings" role="group" :aria-label="t('settings')">
       <ToolbarTooltip v-slot="{ describedby }" text="Github">

@@ -10,10 +10,18 @@
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text);
   text-decoration: none;
+}
+
+.brand-icon {
+  display: block;
+  flex-shrink: 0;
 }
 
 .brand:hover {

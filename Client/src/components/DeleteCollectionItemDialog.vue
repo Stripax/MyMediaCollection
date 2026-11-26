@@ -18,7 +18,7 @@ const category = computed(
 const open = ref(false)
 const deleting = ref(false)
 const error = ref('')
-const { show, dismissMessage } = useSnackbar()
+const { show, dismissMessage, disableItemLinks } = useSnackbar()
 const pendingDelete = ref(false)
 let deletedName = ''
 let deletedMediaType = 1
@@ -48,6 +48,7 @@ async function remove() {
       show(error.value, 'error')
       return
     }
+    disableItemLinks(props.item.id)
     deletedName = requestedName
     deletedMediaType = requestedMediaType
     pendingDelete.value = true

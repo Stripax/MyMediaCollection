@@ -1,7 +1,16 @@
 <script setup lang="ts">
 defineProps<{
   name:
-    'settings' | 'sun' | 'moon' | 'github' | 'login' | 'language' | 'terminal' | 'wrench' | 'trash'
+    | 'settings'
+    | 'sun'
+    | 'moon'
+    | 'github'
+    | 'login'
+    | 'language'
+    | 'terminal'
+    | 'wrench'
+    | 'trash'
+    | 'info'
 }>()
 </script>
 
@@ -45,6 +54,7 @@ defineProps<{
       v-else-if="name === 'wrench'"
       d="M14.7 6.3a5.5 5.5 0 0 0-7 7L3.4 17.6a2.1 2.1 0 0 0 3 3l4.3-4.3a5.5 5.5 0 0 0 7-7l-3.4 3.4-3-3Z"
     />
+    <path v-else-if="name === 'info'" d="M9 5h6M12 5v14M9 19h6" />
     <template v-else-if="name === 'trash'">
       <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" />
     </template>

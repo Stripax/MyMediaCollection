@@ -20,6 +20,18 @@ const metadata: CollectionSourceMetadata = {
 }
 
 describe('Source details overview', () => {
+  it('shows the generic English message if only a Finnish description exists', () => {
+    const wrapper = mount(CollectionSourceDetails, {
+      props: {
+        metadata: { ...metadata, localizedOverviews: { fi: 'Suomeksi', en: ' ' } },
+        mediaType: 2,
+      },
+      global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { fi, en } })] },
+    })
+    expect(wrapper.get('.source-details-overview').text()).toBe('No description available.')
+    wrapper.unmount()
+  })
+
   it.each([1, 2])('follows language changes for TMDB media type %s', async (mediaType) => {
     const i18n = createI18n({ legacy: false, locale: 'fi', messages: { fi, en } })
     const wrapper = mount(CollectionSourceDetails, {

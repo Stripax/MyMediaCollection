@@ -1,0 +1,27 @@
+.collection-info-dialog-title {
+  margin-bottom: 1rem;
+}
+
+.collection-info-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.collection-info-tooltip .toolbar-tooltip-content {
+  left: auto;
+  right: 0;
+  transform: none;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 4rem));
+  white-space: normal;
+}
+
+.collection-info-tooltip:has(button:disabled) {
+  cursor: not-allowed;
+}
+
+.collection-info-tooltip > button:disabled {
+  pointer-events: none;
+}

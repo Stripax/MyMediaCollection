@@ -26,6 +26,8 @@ async function mountApp() {
 }
 
 beforeEach(() => {
+  vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en-US'])
+  vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-US')
   vi.stubGlobal('scrollTo', vi.fn())
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [] }))
   const storage = new Map<string, string>()
@@ -44,9 +46,86 @@ afterEach(() => {
   document.documentElement.lang = ''
   document.title = originalTitle
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('Language selector', () => {
+  it.each([
+    ['fi-FI', 'fi'],
+    ['fi', 'fi'],
+    ['FI-fi', 'fi'],
+    ['en-US', 'en'],
+    ['sv-FI', 'en'],
+    ['fil-PH', 'en'],
+  ])(
+    'uses the preferred device language %s on the first visit (%s)',
+    async (preferred, expected) => {
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue([preferred, 'fi-FI'])
+      const app = await mountApp()
+      expect(document.documentElement.lang).toBe(expected)
+      expect(document.title).toBe(expected === 'fi' ? fi.title : en.title)
+      expect(localStorage.getItem('mmc-language')).toBe(expected)
+      expect(app.get('h1').text()).toBe(expected === 'fi' ? fi.header : en.header)
+    },
+  )
+
+  it('uses navigator.language when the preferred language list is unavailable', async () => {
+    vi.spyOn(navigator, 'languages', 'get').mockReturnValue([])
+    vi.spyOn(navigator, 'language', 'get').mockReturnValue('fi-FI')
+    await mountApp()
+    expect(document.documentElement.lang).toBe('fi')
+  })
+
+  it('falls back to English and the light theme when device settings cannot be read', async () => {
+    vi.spyOn(navigator, 'languages', 'get').mockImplementation(() => {
+      throw new Error('Unavailable')
+    })
+    vi.stubGlobal('matchMedia', undefined)
+    await mountApp()
+    expect(document.documentElement.lang).toBe('en')
+    expect(document.documentElement.dataset.theme).toBe('light')
+  })
+
+  it.each([true, false])(
+    'uses the device dark-mode preference on the first visit (%s)',
+    async (dark) => {
+      vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: dark }))
+      await mountApp()
+      expect(document.documentElement.dataset.theme).toBe(dark ? 'dark' : 'light')
+      expect(localStorage.getItem('mmc-theme')).toBe(dark ? 'dark' : 'light')
+    },
+  )
+
+  it.each(['light', 'dark', 'black'])(
+    'preserves the saved %s theme and saved English language over device settings',
+    async (theme) => {
+      localStorage.setItem('mmc-theme', theme)
+      localStorage.setItem('mmc-language', 'en')
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['fi-FI'])
+      vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: theme !== 'dark' }))
+      await mountApp()
+      expect(document.documentElement.dataset.theme).toBe(theme)
+      expect(document.documentElement.lang).toBe('en')
+    },
+  )
+
+  it('uses device defaults without failing when browser storage is unavailable', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('Blocked')
+      },
+      setItem: () => {
+        throw new Error('Blocked')
+      },
+      clear: () => {},
+    })
+    vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['fi-FI'])
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }))
+    await mountApp()
+    expect(document.documentElement.lang).toBe('fi')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+  })
+
   it('uses the current rain speed and brightness as defaults and updates them live', async () => {
     localStorage.setItem('mmc-theme', 'black')
     const app = await mountApp()

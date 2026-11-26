@@ -79,6 +79,30 @@
   color: inherit;
 }
 
+.snackbar-item-link {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.125rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.snackbar-item-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.snackbar-item-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 .snackbar-close svg {
   width: 1.25rem;
   height: 1.25rem;
@@ -107,19 +131,21 @@
   }
 }
 
-.snackbar-enter-active,
-.snackbar-leave-active {
+.snackbar-enter-active {
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity 500ms ease-out,
+    transform 500ms ease-out;
 }
 
 .snackbar-move {
-  transition: transform 180ms ease;
+  transition: transform 300ms ease-out;
 }
 
 .snackbar-leave-active {
-  position: absolute;
+  transition:
+    opacity 500ms cubic-bezier(1, 0.5, 0.8, 1),
+    transform 500ms cubic-bezier(1, 0.5, 0.8, 1);
+  position: fixed;
   bottom: auto;
   width: 100%;
   pointer-events: none;
@@ -128,7 +154,7 @@
 .snackbar-enter-from,
 .snackbar-leave-to {
   opacity: 0;
-  transform: translateY(0.75rem);
+  transform: translateX(20px);
 }
 
 @media (prefers-reduced-motion: reduce) {

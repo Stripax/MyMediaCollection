@@ -13,6 +13,8 @@ public sealed class CreateCollectionItemRequest : IValidatableObject
     public IReadOnlyList<BoardGameReference>? BaseGames { get; init; }
     public bool? IsCompleteBox { get; init; }
     public bool? IsCollection { get; init; }
+    [Range(1, int.MaxValue)]
+    public long? CoverTmdbId { get; init; }
     [MaxLength(100)]
     public IReadOnlyList<CollectionContent>? CollectionContents { get; init; }
     [MaxLength(1000)]
@@ -36,6 +38,8 @@ public sealed class CreateCollectionItemRequest : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        if (CoverTmdbId.HasValue && (MediaType is not (MediaType.Movie or MediaType.TvSeries) || IsCollection == false || CollectionContents is null))
+            yield return new ValidationResult("Select a cover from the collection contents.", [nameof(CoverTmdbId)]);
         if (MediaType is not (MediaType.Movie or MediaType.TvSeries) && (IsCollection == true || CollectionContents?.Count > 0))
             yield return new ValidationResult("Collections support only movies and TV series.", [nameof(IsCollection)]);
         if (CollectionContents?.Any(entry => entry is null || string.IsNullOrWhiteSpace(entry.Name)) == true)

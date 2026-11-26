@@ -1,7 +1,7 @@
 import { computed, readonly, shallowRef } from 'vue'
 
 export type SnackbarType = 'success' | 'error' | 'info'
-export const snackbarDuration = 5000
+export const snackbarDuration = 4000
 export const snackbarVisibleLimit = 3
 
 interface SnackbarNotice {
@@ -9,6 +9,7 @@ interface SnackbarNotice {
   messageKey: string
   type: SnackbarType
   params: Record<string, string | number>
+  itemId?: number
 }
 
 const notices = shallowRef<SnackbarNotice[]>([])
@@ -26,8 +27,18 @@ export function useSnackbar() {
     messageKey: string,
     type: SnackbarType = 'info',
     params: SnackbarNotice['params'] = {},
+    itemId?: number,
   ) {
-    notices.value = [...notices.value, { id: ++nextId, messageKey, type, params: { ...params } }]
+    notices.value = [
+      ...notices.value,
+      { id: ++nextId, messageKey, type, params: { ...params }, itemId },
+    ]
+  }
+
+  function disableItemLinks(itemId: number) {
+    notices.value = notices.value.map((message) =>
+      message.itemId === itemId ? { ...message, itemId: undefined } : message,
+    )
   }
 
   function dismiss(id?: number) {
@@ -38,5 +49,12 @@ export function useSnackbar() {
     notices.value = notices.value.filter((message) => message.messageKey !== messageKey)
   }
 
-  return { notice: readonly(notice), notices: readonly(notices), show, dismiss, dismissMessage }
+  return {
+    notice: readonly(notice),
+    notices: readonly(notices),
+    show,
+    dismiss,
+    dismissMessage,
+    disableItemLinks,
+  }
 }

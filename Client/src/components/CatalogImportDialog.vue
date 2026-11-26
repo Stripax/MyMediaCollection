@@ -2,6 +2,7 @@
 import { Dialog } from '@ark-ui/vue/dialog'
 import '../style/collection-item-dialog.css'
 import '../style/media-collection.css'
+import '../style/details-fade.css'
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -9,8 +10,7 @@ import {
   mediaFormats,
   boardGameFormats,
   otherOption,
-  gamePlatforms,
-  gameStores,
+  gameStoreOptions,
   pcPlatform,
 } from '../models/collection'
 import { posterUrl, type TmdbResult } from '../models/tmdb'
@@ -19,11 +19,14 @@ import TmdbAttribution from './TmdbAttribution.vue'
 import IgdbAttribution from './IgdbAttribution.vue'
 import TvSeasonOwnership from './TvSeasonOwnership.vue'
 import type { OwnedSeason } from '../models/collection'
-import { igdbCoverUrl, type IgdbResult } from '../models/igdb'
+import { igdbCoverUrl, igdbPlatformOptions, type IgdbResult } from '../models/igdb'
 import { bggImageUrl, type BggResult } from '../models/bgg'
 import BggAttribution from './BggAttribution.vue'
 import { itemNoticeKey } from '../models/itemNotices'
 import BggExpansionDetails from './BggExpansionDetails.vue'
+import CollectionDragHandle from './CollectionDragHandle.vue'
+import FadingCover from './FadingCover.vue'
+import { useCollectionReorder } from '../composables/useCollectionReorder'
 type CatalogResult = TmdbResult | IgdbResult | BggResult
 type CatalogSearchPage = {
   page: number
@@ -71,6 +74,34 @@ const results = ref<CatalogResult[]>([])
 const selected = ref<CatalogResult | null>(null)
 const isCollection = ref(false)
 const collectionSelections = ref<TmdbResult[]>([])
+const inspectedTmdbId = ref<number | null>(null)
+const loadedMembers = new Set<number>()
+const pendingMemberId = ref<number | null>(null)
+const viewedResult = computed(() =>
+  isCollection.value
+    ? (collectionSelections.value.find((entry) => entry.tmdbId === inspectedTmdbId.value) ??
+      selected.value)
+    : selected.value,
+)
+const viewedMemberId = computed(() =>
+  viewedResult.value && 'tmdbId' in viewedResult.value ? viewedResult.value.tmdbId : null,
+)
+const {
+  list: collectionList,
+  draggedIndex,
+  dropIndex,
+  start: startDrag,
+  over: dragOver,
+  drop: dropEntry,
+  end: endDrag,
+  move: moveEntry,
+} = useCollectionReorder(collectionSelections, updateCollectionPreview)
+const selectedTmdbIds = computed(
+  () => new Set(collectionSelections.value.map((entry) => entry.tmdbId)),
+)
+function collectionContains(result: CatalogResult) {
+  return isCollection.value && 'tmdbId' in result && selectedTmdbIds.value.has(result.tmdbId)
+}
 const searched = ref(false)
 const searching = ref(false)
 const saving = ref(false)
@@ -78,12 +109,29 @@ const transitioning = ref(false)
 const pendingSave = ref(false)
 let savedName = ''
 let savedMediaType = 1
+let savedId: number | undefined
 const page = ref(1)
 const totalPages = ref(0)
 const hasNextPage = ref(false)
 const platform = ref<number | ''>('')
+const availablePlatforms = computed(() =>
+  igdbPlatformOptions(
+    selected.value && 'igdbId' in selected.value ? selected.value.platforms : null,
+  ),
+)
+watch(availablePlatforms, (options) => {
+  if (platform.value !== '' && !options.some((option) => option.value === platform.value))
+    platform.value = ''
+})
 const store = ref<number | ''>('')
+const availableStores = computed(() => gameStoreOptions(platform.value))
+watch(availableStores, (stores) => {
+  if (store.value !== '' && !stores.some((option) => option.value === store.value)) store.value = ''
+})
 const isPhysical = ref(false)
+watch(isPhysical, (physical) => {
+  if (physical) store.value = ''
+})
 const isCompleteBox = ref(false)
 const ownedSeasons = ref<OwnedSeason[]>([])
 const loadingDetails = ref(false)
@@ -97,6 +145,7 @@ let searchVersion = 0
 
 function clearSearch() {
   loadingDetails.value = false
+  pendingMemberId.value = null
   searchVersion++
   request?.abort()
   searching.value = false
@@ -111,6 +160,8 @@ function clearSearch() {
 }
 
 function prepare() {
+  inspectedTmdbId.value = null
+  loadedMembers.clear()
   isCollection.value = false
   collectionSelections.value = []
   name.value = ''
@@ -126,11 +177,15 @@ function prepare() {
 
 watch([mediaType, language, query], clearSearch)
 watch(mediaType, () => {
+  inspectedTmdbId.value = null
+  loadedMembers.clear()
   collectionSelections.value = []
   selected.value = null
   name.value = ''
 })
 watch(isCollection, () => {
+  inspectedTmdbId.value = null
+  loadedMembers.clear()
   collectionSelections.value = []
   selected.value = null
   name.value = ''
@@ -216,13 +271,20 @@ async function search(targetPage = 1) {
 
 async function select(result: CatalogResult) {
   if (isCollection.value && 'tmdbId' in result) {
-    if (collectionSelections.value.some((entry) => entry.tmdbId === result.tmdbId)) return
+    const selectedIndex = collectionSelections.value.findIndex(
+      (entry) => entry.tmdbId === result.tmdbId,
+    )
+    if (selectedIndex !== -1) {
+      removeCollectionEntry(selectedIndex)
+      return
+    }
     if (collectionSelections.value.length >= 100) {
       reportError('mediaCollection.tooMany')
       return
     }
     collectionSelections.value = [...collectionSelections.value, result]
     selected.value = collectionSelections.value[0] ?? null
+    await inspectCollectionEntry(result)
     return
   }
   selected.value = result
@@ -231,19 +293,34 @@ async function select(result: CatalogResult) {
   info.value = ''
   isCompleteBox.value = false
   ownedSeasons.value = []
-  if (!('bggId' in result) && (mediaType.value !== 2 || !('tmdbId' in result))) return
+  await loadDetails(result)
+}
+
+async function inspectCollectionEntry(entry: TmdbResult) {
+  inspectedTmdbId.value = entry.tmdbId
+  if (pendingMemberId.value !== entry.tmdbId) await loadDetails(entry, true)
+}
+
+async function loadDetails(result: CatalogResult, asMember = false) {
+  if (asMember && 'tmdbId' in result && loadedMembers.has(result.tmdbId)) return
+  if (
+    !('bggId' in result) &&
+    (!('tmdbId' in result) || (mediaType.value !== 2 && result.overview.trim()))
+  )
+    return
   request?.abort()
   const controller = new AbortController()
   request = controller
   const version = ++searchVersion
   loadingDetails.value = true
+  pendingMemberId.value = asMember && 'tmdbId' in result ? result.tmdbId : null
   try {
     const parameters = new URLSearchParams(
       'bggId' in result
         ? { bggId: String(result.bggId) }
         : {
             tmdbId: String(result.tmdbId),
-            mediaType: '2',
+            mediaType: String(mediaType.value),
             language: language.value,
           },
     )
@@ -255,18 +332,67 @@ async function select(result: CatalogResult) {
       await responseError(response)
       return
     }
-    const details: TmdbResult | BggResult = await response.json()
-    if (version === searchVersion && selected.value) selected.value = details
+    let details: TmdbResult | BggResult = await response.json()
+    if ('tmdbId' in details && !details.overview.trim() && language.value !== 'en-US') {
+      try {
+        const englishParameters = new URLSearchParams({
+          tmdbId: String(details.tmdbId),
+          mediaType: String(mediaType.value),
+          language: 'en-US',
+        })
+        const englishResponse = await fetch(`/api/tmdb/details?${englishParameters}`, {
+          signal: controller.signal,
+        })
+        if (englishResponse.ok) {
+          const english: TmdbResult = await englishResponse.json()
+          details = { ...details, overview: english.overview.trim() }
+        }
+      } catch {
+        // Missing secondary-language details must not prevent adding the item.
+      }
+    }
+    if (version === searchVersion && selected.value) {
+      if (asMember && isCollection.value && 'tmdbId' in details) {
+        const member = details
+        loadedMembers.add(member.tmdbId)
+        collectionSelections.value = collectionSelections.value.map((entry) =>
+          entry.tmdbId === member.tmdbId ? member : entry,
+        )
+        selected.value = collectionSelections.value[0] ?? null
+      } else selected.value = details
+    }
   } catch {
     if (!controller.signal.aborted) reportError(`${props.source}.requestError`)
   } finally {
-    if (version === searchVersion) loadingDetails.value = false
+    if (version === searchVersion) {
+      loadingDetails.value = false
+      pendingMemberId.value = null
+    }
   }
 }
 
 function removeCollectionEntry(index: number) {
   collectionSelections.value = collectionSelections.value.filter((_, current) => current !== index)
+  updateCollectionPreview()
+}
+
+function updateCollectionPreview() {
+  if (
+    loadingDetails.value &&
+    !collectionSelections.value.some((entry) => entry.tmdbId === pendingMemberId.value)
+  ) {
+    request?.abort()
+    searchVersion++
+    loadingDetails.value = false
+    pendingMemberId.value = null
+  }
   selected.value = collectionSelections.value[0] ?? null
+  if (!collectionSelections.value.some((entry) => entry.tmdbId === inspectedTmdbId.value))
+    inspectedTmdbId.value = collectionSelections.value[0]?.tmdbId ?? null
+  const inspected = collectionSelections.value.find(
+    (entry) => entry.tmdbId === inspectedTmdbId.value,
+  )
+  if (inspected && pendingMemberId.value !== inspected.tmdbId) void loadDetails(inspected, true)
 }
 
 async function save() {
@@ -313,7 +439,7 @@ async function save() {
           ...(isIgdb.value
             ? {
                 platform: platform.value,
-                ...(store.value !== '' ? { store: store.value } : {}),
+                ...(!isPhysical.value && store.value !== '' ? { store: store.value } : {}),
               }
             : {}),
           info: info.value,
@@ -329,6 +455,8 @@ async function save() {
       await responseError(response)
       return
     }
+    const saved = await response.json().catch(() => null)
+    savedId = Number.isSafeInteger(saved?.id) && saved.id > 0 ? saved.id : undefined
     savedName = requestedName
     savedMediaType = requestedMediaType
     pendingSave.value = true
@@ -344,7 +472,7 @@ function finishClose() {
   transitioning.value = false
   if (!pendingSave.value) return
   pendingSave.value = false
-  show(itemNoticeKey('saved', savedMediaType), 'success', { name: savedName })
+  show(itemNoticeKey('saved', savedMediaType), 'success', { name: savedName }, savedId)
   emit('saved')
 }
 </script>
@@ -427,7 +555,13 @@ function finishClose() {
                 :aria-label="ct('results')"
               >
                 <li v-for="result in results" :key="resultId(result)">
-                  <button type="button" class="tmdb-result" @click="select(result)">
+                  <button
+                    type="button"
+                    class="tmdb-result"
+                    :data-selected="collectionContains(result) || undefined"
+                    :aria-pressed="isCollection ? collectionContains(result) : undefined"
+                    @click="select(result)"
+                  >
                     <img
                       v-if="coverUrl(result)"
                       :src="coverUrl(result)!"
@@ -455,7 +589,24 @@ function finishClose() {
                         >{{ result.originalTitle }}</span
                       ></span
                     >
-                    <span class="tmdb-select-label">{{ ct('select') }}</span>
+                    <span class="tmdb-select-label">
+                      <svg
+                        v-if="collectionContains(result)"
+                        class="tmdb-selection-check"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m5 12 4 4L19 6" />
+                      </svg>
+                      {{
+                        collectionContains(result) ? t('mediaCollection.selected') : ct('select')
+                      }}
+                    </span>
                   </button>
                 </li>
               </ul>
@@ -492,52 +643,111 @@ function finishClose() {
               >
                 <fieldset class="item-form-fields" :disabled="saving || loadingDetails">
                   <div class="tmdb-selected">
-                    <img
+                    <FadingCover
                       v-if="coverUrl(selected)"
                       :src="coverUrl(selected)!"
                       alt=""
-                      width="92"
-                      height="138"
+                      :width="92"
+                      :height="138"
                     />
-                    <div>
-                      <strong>{{ selected.title }}</strong>
-                      <p v-if="selected.releaseDate">{{ selected.releaseDate }}</p>
-                      <p v-if="'yearPublished' in selected && selected.yearPublished">
-                        {{ selected.yearPublished }}
-                      </p>
-                      <p>{{ selected.overview || ct('noOverview') }}</p>
-                      <template v-if="'bggId' in selected && !loadingDetails">
-                        <BggExpansionDetails
-                          :is-expansion="selected.isExpansion"
-                          :required-games="selected.requiredGames"
-                        />
-                        <p v-if="selected.minPlayers || selected.maxPlayers">
-                          {{ ct('players') }}: {{ selected.minPlayers ?? '–' }}–{{
-                            selected.maxPlayers ?? '–'
-                          }}
-                        </p>
-                        <p v-if="selected.playingTime">
-                          {{ ct('playingTime') }}:
-                          {{ ct('minutes', { count: selected.playingTime }) }}
-                        </p>
-                        <p v-if="selected.minAge">{{ ct('minAge') }}: {{ selected.minAge }}+</p>
-                      </template>
-                      <a
-                        v-if="sourceUrl(selected)"
-                        :href="sourceUrl(selected)!"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        >{{ ct('viewSource') }}</a
+                    <Transition name="details-fade" mode="out-in">
+                      <div
+                        v-if="viewedResult"
+                        :key="isCollection ? (viewedMemberId ?? 'single') : 'single'"
                       >
-                    </div>
+                        <strong>{{ viewedResult.title }}</strong>
+                        <p v-if="viewedResult.releaseDate">{{ viewedResult.releaseDate }}</p>
+                        <p v-if="'yearPublished' in viewedResult && viewedResult.yearPublished">
+                          {{ viewedResult.yearPublished }}
+                        </p>
+                        <p>{{ viewedResult.overview.trim() || ct('noOverview') }}</p>
+                        <template
+                          v-if="isCollection && 'tmdbId' in viewedResult && mediaType === 2"
+                        >
+                          <p v-if="viewedResult.numberOfSeasons != null">
+                            {{
+                              t('tvOwnership.totalSeasons', { count: viewedResult.numberOfSeasons })
+                            }}
+                          </p>
+                          <p v-if="viewedResult.numberOfEpisodes != null">
+                            {{
+                              t('tvOwnership.totalEpisodes', {
+                                count: viewedResult.numberOfEpisodes,
+                              })
+                            }}
+                          </p>
+                        </template>
+                        <template v-if="'bggId' in viewedResult && !loadingDetails">
+                          <BggExpansionDetails
+                            :is-expansion="viewedResult.isExpansion"
+                            :required-games="viewedResult.requiredGames"
+                          />
+                          <p v-if="viewedResult.minPlayers || viewedResult.maxPlayers">
+                            {{ ct('players') }}: {{ viewedResult.minPlayers ?? '–' }}–{{
+                              viewedResult.maxPlayers ?? '–'
+                            }}
+                          </p>
+                          <p v-if="viewedResult.playingTime">
+                            {{ ct('playingTime') }}:
+                            {{ ct('minutes', { count: viewedResult.playingTime }) }}
+                          </p>
+                          <p v-if="viewedResult.minAge">
+                            {{ ct('minAge') }}: {{ viewedResult.minAge }}+
+                          </p>
+                        </template>
+                        <a
+                          v-if="sourceUrl(viewedResult)"
+                          :href="sourceUrl(viewedResult)!"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          >{{ ct('viewSource') }}</a
+                        >
+                      </div>
+                    </Transition>
                   </div>
-                  <ol v-if="isCollection" class="media-collection-selection">
-                    <li v-for="(entry, index) in collectionSelections" :key="entry.tmdbId">
-                      {{ entry.title }}
-                      <button type="button" @click="removeCollectionEntry(index)">
-                        {{ t('mediaCollection.remove') }}
-                      </button>
-                    </li>
+                  <p v-if="isCollection && collectionSelections.length > 1">
+                    {{ t('mediaCollection.reorderHint') }}
+                  </p>
+                  <ol v-if="isCollection" ref="collectionList" class="media-collection-selection">
+                    <TransitionGroup name="collection-content">
+                      <li
+                        v-for="(entry, index) in collectionSelections"
+                        :key="entry.tmdbId"
+                        :data-collection-index="index"
+                        :class="{
+                          'collection-entry-dragging': draggedIndex === index,
+                          'collection-entry-inspected': entry.tmdbId === viewedMemberId,
+                          'collection-entry-drop-target':
+                            dropIndex === index && draggedIndex !== index,
+                        }"
+                        @dragover="dragOver(index, $event)"
+                        @drop="dropEntry(index, $event)"
+                      >
+                        <CollectionDragHandle
+                          :index="index"
+                          :count="collectionSelections.length"
+                          @start="startDrag(index, $event)"
+                          @end="endDrag"
+                          @move="moveEntry(index, $event)"
+                        />
+                        <button
+                          type="button"
+                          class="media-collection-entry-title collection-member-title"
+                          :aria-pressed="entry.tmdbId === viewedMemberId"
+                          :aria-label="t('mediaCollection.inspectItem', { name: entry.title })"
+                          @click="inspectCollectionEntry(entry)"
+                        >
+                          {{ entry.title }}
+                        </button>
+                        <button
+                          type="button"
+                          class="media-collection-remove"
+                          @click="removeCollectionEntry(index)"
+                        >
+                          {{ t('mediaCollection.remove') }}
+                        </button>
+                      </li>
+                    </TransitionGroup>
                   </ol>
                   <p v-if="isCollection">{{ t('mediaCollection.sharedFormat') }}</p>
                   <button v-if="!isCollection" type="button" @click="selected = null">
@@ -574,7 +784,7 @@ function finishClose() {
                       ><select v-model.number="platform" name="Platform" required>
                         <option value="" disabled>{{ t('itemForm.choosePlatform') }}</option>
                         <option
-                          v-for="option in gamePlatforms"
+                          v-for="option in availablePlatforms"
                           :key="option.value"
                           :value="option.value"
                         >
@@ -587,6 +797,7 @@ function finishClose() {
                       ><select
                         v-model.number="store"
                         name="Store"
+                        :disabled="isPhysical || platform === ''"
                         :required="platform === pcPlatform && !isPhysical"
                       >
                         <option value="">
@@ -599,7 +810,7 @@ function finishClose() {
                           }}
                         </option>
                         <option
-                          v-for="option in gameStores"
+                          v-for="option in availableStores"
                           :key="option.value"
                           :value="option.value"
                         >

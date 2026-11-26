@@ -106,7 +106,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     const localized = /\/(578|579|580)$/.test(address.pathname);
     if (address.pathname.endsWith('/580') && address.searchParams.get('language') === 'en-US') { response.writeHead(503); response.end('{}'); return; }
     const data = { id: localized ? Number(address.pathname.split('/').at(-1)) : 603, title: 'The Matrix', original_title: 'The Matrix', name: 'TV example', original_name: 'Original TV example', overview: 'TMDB overview', release_date: '1999-03-30', first_air_date: '2001-04-05', poster_path: '/matrix.jpg' }
-    if (/\/(701|702)$/.test(address.pathname)) { data.id=Number(address.pathname.split('/').at(-1)); data.title=`Movie ${data.id}`; data.name=`Series ${data.id}`; data.poster_path=`/cover-${data.id}.jpg`; }
+    if (/\/(701|702)$/.test(address.pathname)) { data.id=Number(address.pathname.split('/').at(-1)); data.title=`Movie ${data.id}`; data.name=`Series ${data.id}`; data.poster_path=`/cover-${data.id}.jpg`; data.overview=`Overview ${data.id} ${address.searchParams.get('language')}`; }
     if (tv) Object.assign(data, {number_of_seasons:3,number_of_episodes:24,seasons:[{season_number:0,name:'Specials',episode_count:2},{season_number:1,name:'Season 1',episode_count:8},{season_number:2,name:'Season 2',episode_count:8},{season_number:3,name:'Season 3',episode_count:8}]});
     if (localized) { data.title = address.searchParams.get('language') === 'fi-FI' ? 'Tappajahai' : 'Jaws'; data.original_title = 'Jaws'; data.name = address.searchParams.get('language') === 'fi-FI' ? 'Fi-sarja' : 'English series'; data.original_name = 'Original series'; data.overview = address.searchParams.get('language') === 'fi-FI' ? 'Suomenkielinen yhteenveto' : 'English overview'; }
     response.end(JSON.stringify(address.pathname.includes('/search/') ? { page: 1, total_pages: 2, results: [{ ...data, ...(tv ? {} : { title: 'Matrix – hakutulos' }) }] } : data))
@@ -223,6 +223,11 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(item.tmdbId, 701)
     assert.equal(item.posterPath, '/cover-701.jpg')
     assert.deepEqual(item.collectionContents.map(entry => entry.tmdbId), [701, 702])
+    for (const entry of item.collectionContents) {
+      assert.equal(entry.sourceMetadata.title, `Movie ${entry.tmdbId}`)
+      assert.equal(entry.sourceMetadata.overview, `Overview ${entry.tmdbId} fi-FI`)
+      assert.deepEqual(entry.sourceMetadata.localizedOverviews, { fi: `Overview ${entry.tmdbId} fi-FI`, en: `Overview ${entry.tmdbId} en-US` })
+    }
     assert.equal(database.prepare('SELECT COUNT(*) AS count FROM TmdbMetadata WHERE TmdbId IN (701,702)').get().count, 4)
     const updated = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body.item, collectionContents: [...item.collectionContents].reverse() }) })
@@ -234,6 +239,20 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(forged.status, 400)
     const persisted = (await (await fetch(url)).json()).find(entry => entry.id === item.id)
     assert.deepEqual(persisted.collectionContents.map(entry => entry.tmdbId), [702, 701])
+    assert.deepEqual(persisted.collectionContents.map(entry => entry.sourceMetadata.title), ['Movie 702', 'Movie 701'])
+    assert.equal(persisted.sourceMetadata.title, 'Movie 702')
+    const selectedCover = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body.item, coverTmdbId: 701, collectionContents: persisted.collectionContents }) })
+    assert.equal(selectedCover.status, 200)
+    assert.equal((await selectedCover.json()).posterPath, '/cover-701.jpg')
+    const invalidCover = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body.item, coverTmdbId: 999, collectionContents: persisted.collectionContents }) })
+    assert.equal(invalidCover.status, 400)
+    const savedCover = (await (await fetch(url)).json()).find(entry => entry.id === item.id)
+    assert.equal(savedCover.tmdbId, 701)
+    assert.equal(savedCover.posterPath, '/cover-701.jpg')
+    assert.equal(savedCover.sourceMetadata.title, 'Movie 701')
+    assert.deepEqual(savedCover.collectionContents.map(entry => entry.tmdbId), [702, 701])
     for (const tmdbIds of [[], [701, 701], [702, 701], [701, 0]])
       assert.equal((await importBox({ ...body, tmdbIds })).status, 400)
     const failed = await importBox({ ...body, tmdbIds: [701, 404] })
@@ -241,6 +260,23 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count, count + 1)
     assert.equal((await fetch(`${url}/${item.id}`, { method: 'DELETE' })).status, 204)
     assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionContents WHERE CollectionItemId=?').get(item.id).count, 0)
+  })
+  await t.test('returns saved full metadata for every TV collection member in both languages', async () => {
+    const response = await fetch(url.replace('/collection', '/tmdb/import'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tmdbId: 701, tmdbIds: [701, 702], language: 'fi-FI', item: { name: 'Series box', mediaType: 2, mediaFormat: 2, isCollection: true } }),
+    })
+    assert.equal(response.status, 201)
+    const item = await response.json()
+    const listed = (await (await fetch(url)).json()).find(entry => entry.id === item.id)
+    for (const member of listed.collectionContents) {
+      assert.equal(member.sourceMetadata.title, `Series ${member.tmdbId}`)
+      assert.equal(member.sourceMetadata.numberOfSeasons, 3)
+      assert.equal(member.sourceMetadata.numberOfEpisodes, 24)
+      assert.equal(member.sourceMetadata.releaseDate, '2001-04-05')
+      assert.equal(member.sourceMetadata.localizedOverviews.en, `Overview ${member.tmdbId} en-US`)
+    }
+    assert.equal((await fetch(`${url}/${item.id}`, { method: 'DELETE' })).status, 204)
   })
   await t.test('persists enum numbers, Unicode and quoted text with a generated ID', async () => {
     const response = await post({ name: "  Yö — O'Brien  ", mediaType: 2, mediaFormat: 3, info: 'Line 1\nLine 2' })

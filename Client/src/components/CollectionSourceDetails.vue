@@ -14,9 +14,7 @@ const overview = computed(() => {
   if (metadata.source !== 'TMDB' || !metadata.localizedOverviews) return metadata.overview
   const language = locale.value === 'fi' ? 'fi' : 'en'
   return (
-    metadata.localizedOverviews[language]?.trim() ||
-    metadata.localizedOverviews[language === 'fi' ? 'en' : 'fi']?.trim() ||
-    ''
+    metadata.localizedOverviews[language]?.trim() || metadata.localizedOverviews.en?.trim() || ''
   )
 })
 

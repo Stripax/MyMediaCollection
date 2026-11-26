@@ -47,6 +47,231 @@ afterEach(() => {
 })
 
 describe('TMDB import', () => {
+  it('inspects any collection member without changing its order or cover', async () => {
+    const first = { ...movie, overview: 'First description' }
+    const second = {
+      ...movie,
+      tmdbId: 604,
+      title: 'Second movie',
+      posterPath: '/second.jpg',
+      overview: 'Second description',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(json({ page: 1, totalPages: 1, results: [first, second] })),
+    )
+    const dialog = await open('movies')
+    await dialog.get('input[name="IsCollection"]').setValue(true)
+    await dialog.get('input[name="TmdbQuery"]').setValue('Movies')
+    await dialog.get('.tmdb-search-form').trigger('submit')
+    await flushPromises()
+    await dialog.findAll('.tmdb-result')[0]!.trigger('click')
+    await dialog.findAll('.tmdb-result')[1]!.trigger('click')
+    await dialog.get('input[name="Name"]').setValue('My collection')
+    await vi.waitFor(() =>
+      expect(dialog.get('.tmdb-selected').text()).toContain('Second description'),
+    )
+    expect(
+      dialog.get('.tmdb-selected img:not(.cover-fade-leave-active)').attributes('src'),
+    ).toContain('/matrix.jpg')
+    await dialog.findAll('.collection-member-title')[0]!.trigger('click')
+    await vi.waitFor(() =>
+      expect(dialog.get('.tmdb-selected').text()).toContain('First description'),
+    )
+    await dialog.findAll('.collection-member-title')[1]!.trigger('click')
+    await vi.waitFor(() =>
+      expect(dialog.get('.tmdb-selected').text()).toContain('Second description'),
+    )
+    await vi.waitFor(() =>
+      expect(dialog.get('.tmdb-selected a').attributes('href')).toContain('/movie/604'),
+    )
+    expect(
+      dialog.get('.tmdb-selected img:not(.cover-fade-leave-active)').attributes('src'),
+    ).toContain('/matrix.jpg')
+    expect(dialog.findAll('.media-collection-entry-title').map((entry) => entry.text())).toEqual([
+      movie.title,
+      'Second movie',
+    ])
+    expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe(
+      'My collection',
+    )
+  })
+
+  it('loads and retains details separately for each TV collection member', async () => {
+    const first = { ...movie, mediaType: 2, overview: 'First series overview' }
+    const second = {
+      ...first,
+      tmdbId: 604,
+      title: 'Second series',
+      overview: 'Second series overview',
+    }
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [first, second] }))
+      .mockResolvedValueOnce(json({ ...first, numberOfSeasons: 3, numberOfEpisodes: 30 }))
+      .mockResolvedValueOnce(json({ ...second, numberOfSeasons: 5, numberOfEpisodes: 50 }))
+    vi.stubGlobal('fetch', request)
+    const dialog = await open('tvSeries')
+    await dialog.get('input[name="IsCollection"]').setValue(true)
+    await dialog.get('input[name="TmdbQuery"]').setValue('Series')
+    await dialog.get('.tmdb-search-form').trigger('submit')
+    await flushPromises()
+    await dialog.findAll('.tmdb-result')[0]!.trigger('click')
+    await flushPromises()
+    await dialog.findAll('.tmdb-result')[1]!.trigger('click')
+    await flushPromises()
+    await vi.waitFor(() => expect(dialog.get('.tmdb-selected').text()).toContain('50'))
+    await dialog.findAll('.collection-member-title')[0]!.trigger('click')
+    await flushPromises()
+    await vi.waitFor(() => expect(dialog.get('.tmdb-selected').text()).toContain('30'))
+    await vi.waitFor(() =>
+      expect(dialog.get('.tmdb-selected').text()).toContain('First series overview'),
+    )
+    expect(request).toHaveBeenCalledTimes(3)
+  })
+
+  it('reorders collection entries by dragging and imports the new first title as the cover', async () => {
+    const second = { ...movie, tmdbId: 604, title: 'Second movie', posterPath: '/second.jpg' }
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [movie, second] }))
+      .mockResolvedValueOnce(json({ id: 77 }, 201))
+    vi.stubGlobal('fetch', request)
+    const dialog = await open('movies')
+    await dialog.get('input[name="IsCollection"]').setValue(true)
+    await dialog.get('input[name="TmdbQuery"]').setValue('Movies')
+    await dialog.get('.tmdb-search-form').trigger('submit')
+    await flushPromises()
+    await dialog.findAll('.tmdb-result')[0]!.trigger('click')
+    await dialog.findAll('.tmdb-result')[1]!.trigger('click')
+    await dialog.get('input[name="Name"]').setValue('My box')
+    const transfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
+    await dialog
+      .findAll('.collection-drag-handle')[1]!
+      .trigger('dragstart', { dataTransfer: transfer })
+    await dialog
+      .findAll('.media-collection-selection li')[0]!
+      .trigger('dragover', { dataTransfer: transfer })
+    expect(dialog.find('.collection-entry-drop-target').exists()).toBe(true)
+    await dialog
+      .findAll('.media-collection-selection li')[0]!
+      .trigger('drop', { dataTransfer: transfer })
+    expect(dialog.findAll('.media-collection-entry-title').map((entry) => entry.text())).toEqual([
+      'Second movie',
+      movie.title,
+    ])
+    expect(
+      dialog.get('.tmdb-selected img:not(.cover-fade-leave-active)').attributes('src'),
+    ).toContain('/second.jpg')
+    await vi.waitFor(() =>
+      expect(dialog.get('.tmdb-selected a').attributes('href')).toContain('/movie/604'),
+    )
+    expect(dialog.find('.collection-entry-dragging').exists()).toBe(false)
+    await dialog.get('.tmdb-import-form').trigger('submit')
+    await flushPromises()
+    expect(JSON.parse(request.mock.calls[1]![1].body)).toMatchObject({
+      tmdbId: 604,
+      tmdbIds: [604, 603],
+      item: { name: 'My box', mediaFormat: 1 },
+    })
+  })
+
+  it('toggles the first and last collection selections from search results and updates the cover', async () => {
+    const second = { ...movie, tmdbId: 604, title: 'Second movie', posterPath: '/second.jpg' }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(json({ page: 1, totalPages: 1, results: [movie, second] })),
+    )
+    const dialog = await open('movies')
+    await dialog.get('input[name="IsCollection"]').setValue(true)
+    await dialog.get('input[name="TmdbQuery"]').setValue('Movies')
+    await dialog.get('.tmdb-search-form').trigger('submit')
+    await flushPromises()
+    const [firstResult, secondResult] = dialog.findAll('.tmdb-result')
+    await firstResult!.trigger('click')
+    await secondResult!.trigger('click')
+    await dialog.get('input[name="Name"]').setValue('Own box')
+    await firstResult!.trigger('click')
+    expect(dialog.findAll('.media-collection-selection li')).toHaveLength(1)
+    expect(firstResult!.attributes('aria-pressed')).toBe('false')
+    expect(
+      dialog.get('.tmdb-selected img:not(.cover-fade-leave-active)').attributes('src'),
+    ).toContain('/second.jpg')
+    await secondResult!.trigger('click')
+    expect(dialog.find('.tmdb-import-form').exists()).toBe(false)
+    expect(dialog.find('.tmdb-save-button').exists()).toBe(false)
+    expect(secondResult!.attributes('aria-pressed')).toBe('false')
+    await firstResult!.trigger('click')
+    expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe('Own box')
+    expect(
+      dialog.get('.tmdb-selected img:not(.cover-fade-leave-active)').attributes('src'),
+    ).toContain('/matrix.jpg')
+    expect(firstResult!.attributes('aria-pressed')).toBe('true')
+  })
+
+  it.each(['movies', 'tvSeries'] as const)(
+    'uses an English overview for %s when Finnish is missing without replacing the Finnish name',
+    async (category) => {
+      const result = {
+        ...movie,
+        mediaType: category === 'movies' ? 1 : 2,
+        title: 'Suomenkielinen nimi',
+        overview: '  ',
+      }
+      const request = vi
+        .fn()
+        .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [result] }))
+        .mockResolvedValueOnce(json(result))
+        .mockResolvedValueOnce(
+          json({
+            ...result,
+            language: 'en-US',
+            title: 'English name',
+            overview: 'English description',
+          }),
+        )
+      vi.stubGlobal('fetch', request)
+      const dialog = await open(category)
+      await dialog.get('input[name="TmdbQuery"]').setValue('Series')
+      await dialog.get('.tmdb-search-form').trigger('submit')
+      await flushPromises()
+      await dialog.get('.tmdb-result').trigger('click')
+      await flushPromises()
+      expect(dialog.get('.tmdb-selected').text()).toContain('English description')
+      expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe(
+        'Suomenkielinen nimi',
+      )
+      expect(request.mock.calls[2]![0]).toContain('language=en-US')
+    },
+  )
+
+  it.each(['fi', 'en'])(
+    'shows the generic missing description text in %s when no overview is available',
+    async (locale) => {
+      const result = {
+        ...movie,
+        mediaType: 2,
+        language: locale === 'fi' ? 'fi-FI' : 'en-US',
+        overview: '',
+      }
+      const request = vi
+        .fn()
+        .mockResolvedValue(json(result))
+        .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [result] }))
+      vi.stubGlobal('fetch', request)
+      const dialog = await open('tvSeries', locale)
+      await dialog.get('input[name="TmdbQuery"]').setValue('Series')
+      await dialog.get('.tmdb-search-form').trigger('submit')
+      await flushPromises()
+      await dialog.get('.tmdb-result').trigger('click')
+      await flushPromises()
+      expect(dialog.get('.tmdb-selected').text()).toContain(
+        locale === 'fi' ? 'Kuvausta ei ole saatavilla.' : 'No description available.',
+      )
+      expect(request).toHaveBeenCalledTimes(locale === 'fi' ? 3 : 2)
+    },
+  )
+
   it('keeps multiple TMDB selections across searches and uses the first cover for a box', async () => {
     const second = {
       ...movie,
@@ -67,13 +292,29 @@ describe('TMDB import', () => {
     await flushPromises()
     await dialog.get('.tmdb-result').trigger('click')
     await dialog.get('input[name="Name"]').setValue('Matrix collection')
+    expect(dialog.get('.tmdb-result').attributes('data-selected')).toBe('true')
+    expect(dialog.get('.tmdb-result').attributes('aria-pressed')).toBe('true')
+    expect(dialog.get('.tmdb-select-label').text()).toBe('Valittu')
+    expect(dialog.find('.tmdb-selection-check').exists()).toBe(true)
     await dialog.get('input[name="TmdbQuery"]').setValue('Reloaded')
     await dialog.get('.tmdb-search-form').trigger('submit')
     await flushPromises()
+    expect(dialog.get('.tmdb-result').attributes('data-selected')).toBeUndefined()
     await dialog.get('.tmdb-result').trigger('click')
+    await dialog.get('.tmdb-result').trigger('click')
+    expect(dialog.findAll('.media-collection-selection li')).toHaveLength(1)
+    expect(dialog.get('.tmdb-result').attributes('aria-pressed')).toBe('false')
+    expect(dialog.get('.tmdb-select-label').text()).toBe('Valitse')
     await dialog.get('.tmdb-result').trigger('click')
     expect(dialog.findAll('.media-collection-selection li')).toHaveLength(2)
-    expect(dialog.get('.tmdb-selected img').attributes('src')).toContain('/matrix.jpg')
+    expect(
+      dialog.get('.tmdb-selected img:not(.cover-fade-leave-active)').attributes('src'),
+    ).toContain('/matrix.jpg')
+    await dialog.findAll('.media-collection-remove')[1]!.trigger('click')
+    expect(dialog.get('.tmdb-result').attributes('data-selected')).toBeUndefined()
+    expect(dialog.get('.tmdb-result').attributes('aria-pressed')).toBe('false')
+    expect(dialog.get('.tmdb-select-label').text()).toBe('Valitse')
+    await dialog.get('.tmdb-result').trigger('click')
     await dialog.get('select[name="MediaFormat"]').setValue('2')
     await dialog.get('.tmdb-import-form').trigger('submit')
     await flushPromises()

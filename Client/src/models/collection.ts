@@ -70,6 +70,20 @@ export const gameStores = [
   { value: otherOption, label: 'Other' },
 ] as const
 
+export function gameStoreOptions(platform: number | '' | null | undefined) {
+  if (platform == null || platform === '') return []
+  if (platform === otherOption) return gameStores
+  return gameStores.filter(
+    (store) =>
+      store.value === otherOption ||
+      (platform >= 1 && platform <= 4
+        ? store.value === 9
+        : platform >= 5 && platform <= 11
+          ? store.value === 10
+          : platform === pcPlatform && store.value >= 1 && store.value <= 8),
+  )
+}
+
 export interface OwnedSeason {
   seasonNumber: number
   mediaFormat: number
@@ -140,6 +154,7 @@ export interface CollectionContent {
   name: string
   tmdbId?: number | null
   posterPath?: string | null
+  sourceMetadata?: CollectionSourceMetadata | null
 }
 
 export interface BoardGameReference {

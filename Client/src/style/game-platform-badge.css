@@ -1,12 +1,13 @@
 .game-platform-badge {
+  --platform-badge-color: var(--text);
   display: inline-block;
   max-width: 100%;
   margin-bottom: 0.25rem;
   padding: 0.125rem 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--platform-badge-color);
   border-radius: 1rem;
-  background: var(--page-background);
-  color: var(--text);
+  background: transparent;
+  color: var(--platform-badge-color);
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.5;
@@ -16,31 +17,46 @@
 }
 
 .game-platform-badge[data-platform-family='xbox'] {
-  border-color: #15803d;
-  background: #166534;
-  color: #fff;
+  --platform-badge-color: #166534;
 }
 
 .game-platform-badge[data-platform-family='playstation'] {
-  border-color: #1d4ed8;
-  background: #1e40af;
-  color: #fff;
+  --platform-badge-color: #1e40af;
 }
 
 .game-platform-badge[data-platform-family='nintendo'] {
-  border-color: #dc2626;
-  background: #b91c1c;
-  color: #fff;
+  --platform-badge-color: #991b1b;
 }
 
 .game-platform-badge[data-platform-family='pc'] {
-  border-color: #636b75;
-  background: #24272d;
-  color: #f3f4f6;
+  --platform-badge-color: #374151;
 }
 
 .game-platform-badge[data-platform-family='sega'] {
-  border-color: #7c3aed;
-  background: #5b21b6;
-  color: #fff;
+  --platform-badge-color: #6b21a8;
+}
+
+:root:is([data-theme='dark'], [data-theme='black'])
+  .game-platform-badge[data-platform-family='xbox'] {
+  --platform-badge-color: #86efac;
+}
+
+:root:is([data-theme='dark'], [data-theme='black'])
+  .game-platform-badge[data-platform-family='playstation'] {
+  --platform-badge-color: #93c5fd;
+}
+
+:root:is([data-theme='dark'], [data-theme='black'])
+  .game-platform-badge[data-platform-family='nintendo'] {
+  --platform-badge-color: #fca5a5;
+}
+
+:root:is([data-theme='dark'], [data-theme='black'])
+  .game-platform-badge[data-platform-family='pc'] {
+  --platform-badge-color: #cbd5e1;
+}
+
+:root:is([data-theme='dark'], [data-theme='black'])
+  .game-platform-badge[data-platform-family='sega'] {
+  --platform-badge-color: #d8b4fe;
 }

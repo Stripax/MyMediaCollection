@@ -3,11 +3,11 @@ import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-uti
 import { createI18n } from 'vue-i18n'
 import IgdbImportDialog from '../IgdbImportDialog.vue'
 import CollectionTable from '../CollectionTable.vue'
-import { igdbCoverUrl } from '../../models/igdb'
+import { igdbCoverUrl, igdbPlatformOptions } from '../../models/igdb'
 import { useSnackbar } from '../../composables/useSnackbar'
 import en from '../../lang/en.json'
 import fi from '../../lang/fi.json'
-import type { CollectionCategory } from '../../models/collection'
+import { gamePlatforms, type CollectionCategory } from '../../models/collection'
 
 let wrapper: VueWrapper | undefined
 const game = {
@@ -48,6 +48,95 @@ afterEach(() => {
 })
 
 describe('IGDB import', () => {
+  it('offers Xbox, PlayStation and PC stores only for their platforms', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          json({ page: 1, hasNextPage: false, results: [{ ...game, platforms: [] }] }),
+        ),
+    )
+    const dialog = await open()
+    await searchAndSelect(dialog)
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).disabled).toBe(true)
+    const options = () =>
+      dialog.findAll('select[name="Store"] option').map((option) => option.attributes('value'))
+    await dialog.get('select[name="Platform"]').setValue('3')
+    expect(options()).toEqual(['', '9', '99'])
+    await dialog.get('select[name="Store"]').setValue('9')
+    await dialog.get('select[name="Platform"]').setValue('4')
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).value).toBe('9')
+    await dialog.get('select[name="Platform"]').setValue('9')
+    expect(options()).toEqual(['', '10', '99'])
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).value).toBe('')
+    await dialog.get('select[name="Platform"]').setValue('26')
+    expect(options()).toEqual(['', '1', '2', '3', '4', '5', '6', '7', '8', '99'])
+  })
+
+  it.each([
+    [
+      ['PlayStation 5', 'PC (Microsoft Windows)', 'PlayStation 5'],
+      [9, 26, 99],
+    ],
+    [
+      [
+        'Xbox Series X|S',
+        'Wii',
+        'Wii U',
+        'GameCube',
+        'Super Nintendo Entertainment System',
+        'Sega Mega Drive/Genesis',
+      ],
+      [4, 13, 15, 16, 17, 23, 99],
+    ],
+    [['Linux', 'Mac'], [99]],
+    [[], gamePlatforms.map((platform) => platform.value)],
+    [['  '], gamePlatforms.map((platform) => platform.value)],
+  ])('maps IGDB platforms %j to stored platform values', (names, expected) => {
+    expect(igdbPlatformOptions(names as string[]).map((option) => option.value)).toEqual(expected)
+  })
+
+  it('limits platform choices to the selected game and clears an incompatible previous choice', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        json({
+          page: 1,
+          hasNextPage: false,
+          results: [game, { ...game, igdbId: 2000, title: 'Xbox game', platforms: ['Xbox One'] }],
+        }),
+      ),
+    )
+    const dialog = await open()
+    await searchAndSelect(dialog)
+    expect(
+      dialog.findAll('select[name="Platform"] option').map((option) => option.attributes('value')),
+    ).toEqual(['', '9', '26', '99'])
+    await dialog.get('select[name="Platform"]').setValue('9')
+    await dialog.get('.tmdb-import-form button[type="button"]').trigger('click')
+    await dialog.findAll('.tmdb-result')[1]!.trigger('click')
+    expect(
+      dialog.findAll('select[name="Platform"] option').map((option) => option.attributes('value')),
+    ).toEqual(['', '3', '99'])
+    expect((dialog.get('select[name="Platform"]').element as HTMLSelectElement).value).toBe('')
+  })
+
+  it('uses the current complete platform list when IGDB returns no platforms', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          json({ page: 1, hasNextPage: false, results: [{ ...game, platforms: [] }] }),
+        ),
+    )
+    const dialog = await open()
+    await searchAndSelect(dialog)
+    expect(
+      dialog.findAll('select[name="Platform"] option').map((option) => option.attributes('value')),
+    ).toEqual(['', ...gamePlatforms.map((option) => String(option.value))])
+  })
   it('imports a physical PC copy without a digital store', async () => {
     const request = vi
       .fn()
@@ -57,12 +146,17 @@ describe('IGDB import', () => {
     const dialog = await open()
     await searchAndSelect(dialog)
     await dialog.get('select[name="Platform"]').setValue('26')
+    await dialog.get('select[name="Store"]').setValue('1')
     await dialog.get('input[name="IsPhysical"]').setValue(true)
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).value).toBe('')
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).disabled).toBe(true)
+    expect(dialog.get('select[name="Store"]').attributes('required')).toBeUndefined()
     await dialog.get('.tmdb-import-form').trigger('submit')
     await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
     expect(useSnackbar().notice.value).toMatchObject({
       messageKey: 'collection.notifications.saved.videoGames',
       params: { name: game.title },
+      itemId: 8,
     })
     const body = JSON.parse(request.mock.calls[1]![1].body)
     expect(body.item.isPhysical).toBe(true)
@@ -90,6 +184,9 @@ describe('IGDB import', () => {
       expect(url.searchParams.has('mediaType')).toBe(false)
       expect(dialog.find('select[name="MediaFormat"]').exists()).toBe(false)
       expect(dialog.find('select[name="Store"]').exists()).toBe(true)
+      expect(dialog.get('select[name="Store"]').element.closest('label')?.textContent).toContain(
+        locale === 'fi' ? 'Digitaalinen kauppa' : 'Digital store',
+      )
       expect(dialog.get('.tmdb-selected img').attributes('src')).toBe(
         'https://images.igdb.com/igdb/image/upload/t_cover_big/cover_id.jpg',
       )
@@ -115,7 +212,7 @@ describe('IGDB import', () => {
     },
   )
 
-  it('requires a platform and PC store, retains the store when changing back to a console', async () => {
+  it('requires a PC store and clears it when switching to a console', async () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce(json({ page: 1, hasNextPage: false, results: [game] }))
@@ -131,13 +228,24 @@ describe('IGDB import', () => {
     expect(request).toHaveBeenCalledTimes(1)
     expect(dialog.get('[role="alert"]').text()).toBe(fi.itemForm.storeRequired)
     await dialog.get('select[name="Store"]').setValue('1')
-    await dialog.get('select[name="Platform"]').setValue('8')
+    await dialog.get('input[name="IsPhysical"]').setValue(true)
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).disabled).toBe(true)
+    await dialog.get('input[name="IsPhysical"]').setValue(false)
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).disabled).toBe(false)
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).value).toBe('')
+    await dialog.get('select[name="Store"]').setValue('1')
+    await dialog.get('select[name="Platform"]').setValue('9')
     expect(dialog.find('select[name="Store"]').exists()).toBe(true)
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).value).toBe('')
+    expect(
+      dialog.findAll('select[name="Store"] option').map((option) => option.attributes('value')),
+    ).toEqual(['', '10', '99'])
+    await dialog.get('select[name="Store"]').setValue('10')
     await dialog.get('.tmdb-import-form').trigger('submit')
     await flushPromises()
     const body = JSON.parse(request.mock.calls[1]![1].body)
-    expect(body.item.platform).toBe(8)
-    expect(body.item.store).toBe(1)
+    expect(body.item.platform).toBe(9)
+    expect(body.item.store).toBe(10)
     await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
   })
 

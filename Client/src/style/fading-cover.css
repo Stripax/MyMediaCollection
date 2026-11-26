@@ -1,0 +1,39 @@
+.fading-cover {
+  display: grid;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 0.375rem;
+}
+
+.fading-cover > img {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  object-fit: cover;
+}
+
+.cover-fade-enter-active,
+.cover-fade-leave-active {
+  transition: opacity 300ms ease-in-out;
+}
+
+.cover-fade-leave-active {
+  pointer-events: none;
+}
+
+.cover-fade-enter-from,
+.cover-fade-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-fade-enter-active,
+  .cover-fade-leave-active {
+    transition: none;
+  }
+}

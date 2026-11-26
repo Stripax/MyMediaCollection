@@ -9,6 +9,7 @@ public sealed record CollectionContent
     [Range(1, int.MaxValue)]
     public long? TmdbId { get; init; }
     public string? PosterPath { get; init; }
+    public CollectionSourceMetadata? SourceMetadata { get; init; }
     [System.Text.Json.Serialization.JsonIgnore]
     public long? TmdbMetadataId { get; init; }
 }

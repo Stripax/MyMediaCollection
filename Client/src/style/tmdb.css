@@ -23,6 +23,17 @@
   background: var(--page-background);
   border-color: var(--accent);
 }
+
+.tmdb-result[data-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: var(--accent);
+}
+
+.tmdb-selection-check {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
 .tmdb-result-poster {
   width: 56px;
   height: 84px;
@@ -44,6 +55,9 @@
   font-size: 0.875rem;
 }
 .tmdb-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   margin-left: auto;
   color: var(--accent);
   font-size: 0.875rem;
@@ -88,6 +102,9 @@
   }
   .tmdb-select-label {
     display: none;
+  }
+  .tmdb-result[data-selected='true'] .tmdb-select-label {
+    display: inline-flex;
   }
   .tmdb-pagination {
     flex-wrap: wrap;

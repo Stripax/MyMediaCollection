@@ -175,7 +175,6 @@
 }
 
 .item-form :disabled {
-  cursor: wait;
   opacity: 0.65;
 }
 
@@ -281,7 +280,6 @@
 .item-dialog-cancel:disabled,
 .collection-delete-confirm:disabled {
   opacity: 0.65;
-  cursor: wait;
 }
 
 @media (prefers-reduced-motion: reduce) {

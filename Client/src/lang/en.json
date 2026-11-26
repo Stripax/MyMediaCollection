@@ -40,13 +40,16 @@
     "searchResults": "Search results: {count}",
     "noMatches": "No matching items were found in the selected category.",
     "actions": "Actions",
+    "showInfo": "Show additional information for {name}",
+    "noInfo": "No additional information.",
+    "noInfoTooltip": "No additional information",
     "edit": "Edit",
     "editItem": "Edit item {name}",
     "delete": "Delete",
     "deleteItem": "Delete item {name}",
     "cancel": "Cancel",
     "deleting": "Deleting…",
-    "deleted": "“{name}” was deleted from your collection.",
+    "deleted": "{name} was deleted from your collection.",
     "deleteError": "Deleting failed. Please try again.",
     "title": "Collection items",
     "loading": "Loading collection…",
@@ -71,25 +74,25 @@
     },
     "notifications": {
       "saved": {
-        "all": "“{name}” was added to your collection.",
-        "movies": "Movie “{name}” was added to your collection.",
-        "tvSeries": "TV series “{name}” was added to your collection.",
-        "videoGames": "Video game “{name}” was added to your collection.",
-        "boardGames": "Board or card game “{name}” was added to your collection."
+        "all": "{name} was added to your collection.",
+        "movies": "Movie {name} was added to your collection.",
+        "tvSeries": "TV series {name} was added to your collection.",
+        "videoGames": "Video game {name} was added to your collection.",
+        "boardGames": "Board or card game {name} was added to your collection."
       },
       "updated": {
-        "all": "Changes to “{name}” were saved.",
-        "movies": "Changes to movie “{name}” were saved.",
-        "tvSeries": "Changes to TV series “{name}” were saved.",
-        "videoGames": "Changes to video game “{name}” were saved.",
-        "boardGames": "Changes to board or card game “{name}” were saved."
+        "all": "Changes to {name} were saved.",
+        "movies": "Changes to movie {name} were saved.",
+        "tvSeries": "Changes to TV series {name} were saved.",
+        "videoGames": "Changes to video game {name} were saved.",
+        "boardGames": "Changes to board or card game {name} were saved."
       },
       "deleted": {
-        "all": "“{name}” was deleted from your collection.",
-        "movies": "Movie “{name}” was deleted from your collection.",
-        "tvSeries": "TV series “{name}” was deleted from your collection.",
-        "videoGames": "Video game “{name}” was deleted from your collection.",
-        "boardGames": "Board or card game “{name}” was deleted from your collection."
+        "all": "{name} was deleted from your collection.",
+        "movies": "Movie {name} was deleted from your collection.",
+        "tvSeries": "TV series {name} was deleted from your collection.",
+        "videoGames": "Video game {name} was deleted from your collection.",
+        "boardGames": "Board or card game {name} was deleted from your collection."
       }
     }
   },
@@ -97,15 +100,16 @@
     "gameType": "Game type",
     "chooseGameType": "Select a game type",
     "gameTypeRequired": "Select board game, card game or other game.",
-    "store": "Store",
-    "chooseStore": "Select a game store",
+    "store": "Digital store",
+    "chooseStore": "Select a digital store",
     "storeRequired": "Select the store for the digital PC game.",
     "platform": "Platform",
+    "currentPlatform": "{platform} (current)",
     "choosePlatform": "Select a platform",
     "platformRequired": "Select a platform for the game.",
     "editTitle": "Edit collection item",
     "editDescription": "Edit the item details and save your changes.",
-    "updated": "Changes to “{name}” were saved.",
+    "updated": "Changes to {name} were saved.",
     "notFound": "This item no longer exists. Close the dialog and reload the collection.",
     "chooseFormat": "Choose a media format",
     "title": "Collection item",
@@ -113,7 +117,7 @@
     "add": "Add",
     "saveChanges": "Save changes",
     "saving": "Saving…",
-    "saved": "“{name}” was added to your collection.",
+    "saved": "{name} was added to your collection.",
     "nameRequired": "Enter a name for the item.",
     "validationError": "Check the name, category, format or platform and the store for PC games. Additional information is limited to 10,000 characters.",
     "saveError": "Saving failed. Check your connection and try again.",
@@ -123,7 +127,7 @@
     "info": "Additional information",
     "close": "Cancel",
     "isPhysical": "Physical copy",
-    "chooseStoreOptional": "Select a store (optional)"
+    "chooseStoreOptional": "Select a digital store (optional)"
   },
   "sidebar": {
     "categories": "Categories",
@@ -169,7 +173,7 @@
     "select": "Select",
     "noResults": "No results found. Try another name or add the item manually.",
     "noPoster": "No poster",
-    "noOverview": "No overview is available in this language.",
+    "noOverview": "No description available.",
     "viewSource": "View on TMDB",
     "changeSelection": "Choose a different title",
     "pages": "Search result pages",
@@ -226,7 +230,7 @@
     "overview": "Overview",
     "fetchedAt": "Data retrieved",
     "unknown": "Unknown",
-    "noOverview": "No overview is available.",
+    "noOverview": "No description available.",
     "finnish": "Finnish",
     "english": "English",
     "openBgg": "Open on BGG"
@@ -291,6 +295,12 @@
   },
   "mediaCollection": {
     "label": "Collection",
+    "selected": "Selected",
+    "details": "Details",
+    "info": "Info",
+    "inspectItem": "Show TMDB details for {name}",
+    "reorder": "Move item {number} by dragging or using the up/down arrow keys",
+    "reorderHint": "Drag the handle or use its arrow keys to reorder items. The first item's image is the collection cover.",
     "sharedFormat": "All titles in the collection share one format. The first TMDB title provides the cover image.",
     "entryName": "Title {number}",
     "remove": "Remove from collection",

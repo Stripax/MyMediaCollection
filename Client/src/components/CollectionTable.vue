@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, type ComponentPublicInstance } from 'vue'
+import '../style/collection-actions.css'
+import CollectionInfoDialog from './CollectionInfoDialog.vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import CollectionItemDialog from './CollectionItemDialog.vue'
 import DeleteCollectionItemDialog from './DeleteCollectionItemDialog.vue'
@@ -37,6 +39,65 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ retry: []; changed: [] }>()
 const searchQuery = ref('')
+const tableElement = ref<HTMLTableElement | null>(null)
+const highlights = new Map<number, { row: HTMLElement; timer: ReturnType<typeof setTimeout> }>()
+const editedFields: (keyof CollectionItem)[] = [
+  'name',
+  'mediaFormat',
+  'platform',
+  'store',
+  'isPhysical',
+  'info',
+  'updatedAt',
+  'isCompleteBox',
+  'ownedSeasons',
+  'boardGameKind',
+  'baseGames',
+  'isCollection',
+  'collectionContents',
+]
+
+function clearHighlight(id: number) {
+  const highlight = highlights.get(id)
+  if (!highlight) return
+  clearTimeout(highlight.timer)
+  highlight.row.classList.remove('collection-row-updated')
+  highlights.delete(id)
+}
+
+function clearHighlights() {
+  for (const id of highlights.keys()) clearHighlight(id)
+}
+
+watch(
+  () => props.items,
+  (items, previous) => {
+    const previousItems = new Map(previous.map((item) => [item.id, item]))
+    for (const id of highlights.keys())
+      if (!items.some((item) => item.id === id)) clearHighlight(id)
+    for (const item of items) {
+      const before = previousItems.get(item.id)
+      if (
+        !before ||
+        JSON.stringify(editedFields.map((field) => before[field])) ===
+          JSON.stringify(editedFields.map((field) => item[field]))
+      )
+        continue
+      const row = tableElement.value?.querySelector<HTMLElement>(
+        `tbody tr[data-item-id="${item.id}"]`,
+      )
+      if (!row || row.hasAttribute('aria-hidden')) continue
+      clearHighlight(item.id)
+      // Restart the pulse even when the same item is saved again during its highlight.
+      void row.offsetWidth
+      row.classList.add('collection-row-updated')
+      highlights.set(item.id, { row, timer: setTimeout(() => clearHighlight(item.id), 1800) })
+    }
+  },
+  { flush: 'post' },
+)
+watch(() => props.category, clearHighlights, { flush: 'sync' })
+onBeforeUnmount(clearHighlights)
 const editors = new Map<number, InstanceType<typeof CollectionItemDialog>>()
 const linkedEditor = ref<InstanceType<typeof CollectionItemDialog> | null>(null)
 const linkedItemId = ref<number | null>(null)
@@ -102,48 +163,72 @@ function categoryLabel(mediaType: number) {
 
 function formatLabel(item: CollectionItem) {
   const format = boardGameFormats.find((format) => format.value === item.mediaFormat)
-  return item.mediaType === 4 && format ? t(format.label) : '—'
+  return item.mediaType === 4 && format ? t(format.label) : null
 }
+
+// Keep leaving rows in normal table flow until their slide finishes.
+const leavePositions = new WeakMap<Element, Map<HTMLElement, DOMRect>>()
+const leaveListeners = new WeakMap<Element, (event: Event) => void>()
+const rowMoves = new Map<HTMLElement, Animation>()
+
+function cancelRowMoves() {
+  for (const animation of rowMoves.values()) animation.cancel()
+  rowMoves.clear()
+}
+watch(() => props.category, cancelRowMoves, { flush: 'sync' })
+onBeforeUnmount(cancelRowMoves)
 
 function prepareRowLeave(element: Element) {
   const row = element as HTMLTableRowElement
-  const bounds = row.getBoundingClientRect()
-  const parentBounds = row.parentElement!.getBoundingClientRect()
-  const widths = Array.from(row.cells, (cell) => cell.getBoundingClientRect().width)
-
-  // Preserve table column widths while Vue moves the remaining rows into place.
-  Object.assign(row.style, {
-    position: 'absolute',
-    top: `${bounds.top - parentBounds.top}px`,
-    left: `${bounds.left - parentBounds.left}px`,
-    width: `${bounds.width}px`,
-    height: `${bounds.height}px`,
-    display: 'table',
-    tableLayout: 'fixed',
-  })
-  Array.from(row.cells).forEach((cell, index) => {
-    cell.style.width = `${widths[index]}px`
-  })
+  const siblings = Array.from(row.parentElement?.children ?? []) as HTMLElement[]
+  const capturePositions = () =>
+    leavePositions.set(
+      row,
+      new Map(
+        siblings
+          .filter(
+            (sibling) =>
+              sibling !== row && sibling.isConnected && !sibling.hasAttribute('aria-hidden'),
+          )
+          .map((sibling) => [sibling, sibling.getBoundingClientRect()]),
+      ),
+    )
+  capturePositions()
+  // Refresh positions before Vue removes the row, including any concurrent moves.
+  const listener = (event: Event) => {
+    if (event.target === row) capturePositions()
+  }
+  leaveListeners.set(row, listener)
+  row.addEventListener('transitionend', listener, true)
   row.inert = true
   row.setAttribute('aria-hidden', 'true')
 }
 
 function finishRowLeave(element: Element) {
   const row = element as HTMLTableRowElement
-  Object.assign(row.style, {
-    position: '',
-    top: '',
-    left: '',
-    width: '',
-    height: '',
-    display: '',
-    tableLayout: '',
-  })
-  Array.from(row.cells).forEach((cell) => {
-    cell.style.width = ''
-  })
+  const positions = leavePositions.get(row)
+  const listener = leaveListeners.get(row)
+  if (listener) row.removeEventListener('transitionend', listener, true)
+  leaveListeners.delete(row)
+  leavePositions.delete(row)
   row.inert = false
   row.removeAttribute('aria-hidden')
+  // A cancelled filter transition leaves the row in place.
+  if (row.isConnected || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  for (const [sibling, previous] of positions ?? []) {
+    if (!sibling.isConnected || typeof sibling.animate !== 'function') continue
+    rowMoves.get(sibling)?.cancel()
+    const difference = previous.top - sibling.getBoundingClientRect().top
+    if (Math.abs(difference) < 1) continue
+    const animation = sibling.animate(
+      [{ transform: `translateY(${difference}px)` }, { transform: 'translateY(0)' }],
+      { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    )
+    rowMoves.set(sibling, animation)
+    animation.onfinish = () => {
+      if (rowMoves.get(sibling) === animation) rowMoves.delete(sibling)
+    }
+  }
 }
 </script>
 
@@ -198,35 +283,38 @@ function finishRowLeave(element: Element) {
       :aria-label="t('collection.title')"
       tabindex="0"
     >
-      <table class="collection-table" :data-category="category" :aria-label="t('collection.title')">
+      <table
+        ref="tableElement"
+        class="collection-table"
+        :data-category="category"
+        :aria-label="t('collection.title')"
+      >
         <thead>
           <tr>
             <th scope="col">{{ t('itemForm.name') }}</th>
             <th v-if="category === 'all'" class="collection-category" scope="col">
               {{ t('collection.category') }}
             </th>
-            <th
-              v-if="category === 'all' || category === 'boardGames'"
-              class="collection-format"
-              scope="col"
-            >
-              {{ t('itemForm.mediaFormat') }}
-            </th>
             <th v-if="category === 'videoGames'" class="collection-copy-type" scope="col">
               {{ t('collection.copyType') }}
             </th>
-            <th scope="col">{{ t('itemForm.info') }}</th>
             <th scope="col">{{ t('collection.actions') }}</th>
           </tr>
         </thead>
         <TransitionGroup
+          :key="category"
           tag="tbody"
           name="collection-row"
           @before-leave="prepareRowLeave"
           @after-leave="finishRowLeave"
           @leave-cancelled="finishRowLeave"
         >
-          <tr v-for="item in visibleItems" :key="item.id" class="collection-item-row">
+          <tr
+            v-for="item in visibleItems"
+            :key="item.id"
+            :data-item-id="item.id"
+            class="collection-item-row"
+          >
             <td>
               <div class="collection-name-content">
                 <ToolbarTooltip
@@ -262,6 +350,7 @@ function finishRowLeave(element: Element) {
                     />
                   </component>
                 </ToolbarTooltip>
+                <span v-else class="collection-cover-placeholder" aria-hidden="true" />
                 <div class="collection-name-label">
                   <button
                     type="button"
@@ -282,8 +371,16 @@ function finishRowLeave(element: Element) {
                     :platform="item.platform"
                     :store="item.store"
                   />
-                  <div v-if="boardGameKind(item) !== undefined" class="bgg-item-badges">
+                  <div v-if="item.mediaType === 4" class="bgg-item-badges">
                     <span
+                      v-if="formatLabel(item)"
+                      class="bgg-format-badge"
+                      :data-game-format="item.mediaFormat"
+                      :aria-label="`${t('itemForm.gameType')}: ${formatLabel(item)}`"
+                      >{{ formatLabel(item) }}</span
+                    >
+                    <span
+                      v-if="boardGameKind(item) !== undefined"
                       :class="
                         boardGameKind(item) === 2
                           ? 'bgg-expansion-badge'
@@ -336,9 +433,6 @@ function finishRowLeave(element: Element) {
             <td v-if="category === 'all'" class="collection-category">
               {{ categoryLabel(item.mediaType) }}
             </td>
-            <td v-if="category === 'all' || category === 'boardGames'" class="collection-format">
-              {{ formatLabel(item) }}
-            </td>
             <td v-if="category === 'videoGames'" class="collection-copy-type">
               {{
                 t(
@@ -350,9 +444,9 @@ function finishRowLeave(element: Element) {
                 )
               }}
             </td>
-            <td class="collection-info">{{ item.info || '—' }}</td>
             <td>
               <div class="collection-row-actions">
+                <CollectionInfoDialog :item="item" />
                 <CollectionItemDialog
                   :ref="(editor) => setEditor(item.id, editor)"
                   :item="item"
@@ -365,9 +459,7 @@ function finishRowLeave(element: Element) {
           </tr>
           <tr v-if="!visibleItems.length && !loading && !error" key="empty">
             <td
-              :colspan="
-                category === 'all' ? 5 : category === 'movies' || category === 'tvSeries' ? 3 : 4
-              "
+              :colspan="category === 'all' || category === 'videoGames' ? 3 : 2"
               class="collection-empty"
             >
               {{

@@ -206,7 +206,8 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
                 group => (IReadOnlyList<CollectionContent>)group.Select(row => new CollectionContent { Name=row.Name, TmdbId=row.TmdbId, TmdbMetadataId=row.TmdbMetadataId, PosterPath=row.PosterPath }).ToArray());
             items = items.Select(item => item with { CollectionContents = item.IsCollection ? grouped.GetValueOrDefault(item.Id) ?? [] : [] }).ToArray();
         }
-        var tmdbIds = items.Where(item => item.TmdbMetadataId.HasValue).Select(item => item.TmdbMetadataId!.Value).Distinct().ToArray();
+        var tmdbIds = items.SelectMany(item => item.CollectionContents.Select(entry => entry.TmdbMetadataId).Append(item.TmdbMetadataId))
+            .OfType<long>().Distinct().ToArray();
         var igdbIds = items.Where(item => item.IgdbMetadataId.HasValue).Select(item => item.IgdbMetadataId!.Value).Distinct().ToArray();
         var tmdb = new Dictionary<long, CollectionSourceMetadata>();
         var igdb = new Dictionary<long, CollectionSourceMetadata>();
@@ -240,7 +241,8 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
                 """, new { Ids = bggIds }, transaction, cancellationToken: cancellationToken));
             bgg = rows.ToDictionary(row => row.Id, ToSourceMetadata);
         }
-        var externalIds = items.Where(item => item.TmdbId.HasValue).Select(item => item.TmdbId!.Value).Distinct().ToArray();
+        var externalIds = items.SelectMany(item => item.CollectionContents.Select(entry => entry.TmdbId).Append(item.TmdbId))
+            .OfType<long>().Distinct().ToArray();
         var localized = new Dictionary<(long, MediaType), IReadOnlyDictionary<string, string>>();
         var overviews = new Dictionary<(long, MediaType), IReadOnlyDictionary<string, string>>();
         if (externalIds.Length > 0)
@@ -263,6 +265,12 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
         }
         var enriched = items.Select(item => item with
         {
+            CollectionContents = item.CollectionContents.Select(entry => entry with
+            {
+                SourceMetadata = entry.TmdbMetadataId is long memberId && tmdb.TryGetValue(memberId, out var member)
+                    ? member with { LocalizedOverviews = entry.TmdbId is long memberExternalId ? overviews.GetValueOrDefault((memberExternalId, item.MediaType)) : null }
+                    : null
+            }).ToArray(),
             OwnedSeasons = ownership.GetValueOrDefault(item.Id) ?? [],
             LocalizedTitles = item.TmdbId is long externalId ? localized.GetValueOrDefault((externalId, item.MediaType)) : null,
             SourceMetadata = item.MediaType is MediaType.Movie or MediaType.TvSeries && item.TmdbMetadataId is long tmdbId
@@ -312,6 +320,7 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
     {
         if (!item.IsCollection)
         {
+            if (request.CoverTmdbId.HasValue) throw new CollectionValidationException("Select a cover from the collection contents.");
             if (request.CollectionContents?.Count > 0) throw new CollectionValidationException("Enable collection before adding contents.");
             await connection.ExecuteAsync(new CommandDefinition("DELETE FROM CollectionContents WHERE CollectionItemId=@Id;", new { item.Id }, transaction, cancellationToken: cancellationToken));
             return item;
@@ -347,14 +356,17 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
             }
         }
         if (entries.Count is < 1 or > 100) throw new CollectionValidationException("A collection must contain between 1 and 100 titles.");
+        var cover = request.CoverTmdbId is long coverId
+            ? entries.FirstOrDefault(entry => entry.TmdbId == coverId)
+                ?? throw new CollectionValidationException("Select a cover from the collection contents.")
+            : entries[0];
         await connection.ExecuteAsync(new CommandDefinition("DELETE FROM CollectionContents WHERE CollectionItemId=@Id;", new { item.Id }, transaction, cancellationToken: cancellationToken));
         for (var index = 0; index < entries.Count; index++)
             await connection.ExecuteAsync(new CommandDefinition("INSERT INTO CollectionContents (CollectionItemId,Position,Name,TmdbMetadataId) VALUES (@Id,@Position,@Name,@TmdbMetadataId);",
                 new { item.Id, Position=index, entries[index].Name, entries[index].TmdbMetadataId }, transaction, cancellationToken: cancellationToken));
-        var first = entries[0];
         await connection.ExecuteAsync(new CommandDefinition("UPDATE Collection SET TmdbMetadataId=@TmdbMetadataId,IsNameCustom=1,IsCompleteBox=0 WHERE Id=@Id;",
-            new { item.Id, first.TmdbMetadataId }, transaction, cancellationToken: cancellationToken));
-        return item with { TmdbMetadataId=first.TmdbMetadataId, TmdbId=first.TmdbId, PosterPath=first.PosterPath, IsNameCustom=true, IsCompleteBox=false };
+            new { item.Id, cover.TmdbMetadataId }, transaction, cancellationToken: cancellationToken));
+        return item with { TmdbMetadataId=cover.TmdbMetadataId, TmdbId=cover.TmdbId, PosterPath=cover.PosterPath, IsNameCustom=true, IsCompleteBox=false };
     }
 
     private static IReadOnlyList<BoardGameReference> ReadBaseGames(string json)

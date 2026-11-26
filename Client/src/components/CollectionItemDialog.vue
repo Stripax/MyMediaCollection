@@ -5,9 +5,11 @@ import { useI18n } from 'vue-i18n'
 import ToolbarTooltip from './ToolbarTooltip.vue'
 import ToolbarIcon from './ToolbarIcon.vue'
 import CollectionSourceDetails from './CollectionSourceDetails.vue'
+import '../style/details-fade.css'
 import TvSeasonOwnership from './TvSeasonOwnership.vue'
 import BoardGameFields from './BoardGameFields.vue'
 import MediaCollectionContents from './MediaCollectionContents.vue'
+import FadingCover from './FadingCover.vue'
 import { snackbarElements, useSnackbar } from '../composables/useSnackbar'
 import {
   itemSourceUrl,
@@ -17,12 +19,13 @@ import {
 } from '../models/itemSources'
 import { displayItemName } from '../models/itemNames'
 import { itemNoticeKey } from '../models/itemNotices'
+import { igdbPlatformOptions } from '../models/igdb'
 import {
   mediaCategories as mediaTypes,
   mediaFormats,
   boardGameFormats,
   gamePlatforms,
-  gameStores,
+  gameStoreOptions,
   pcPlatform,
   otherOption,
   type CollectionItem,
@@ -44,15 +47,29 @@ const props = withDefaults(
   }>(),
   { category: 'all', items: () => [] },
 )
-const emit = defineEmits<{ saved: [] }>()
+const emit = defineEmits<{ saved: []; closed: [] }>()
 const form = reactive({ MediaType: 1, Name: '', MediaFormat: 1, Info: '' })
 const selectedPlatform = ref<number | ''>('')
 const selectedStore = ref<number | ''>('')
+const availableStores = computed(() => gameStoreOptions(selectedPlatform.value))
+watch(availableStores, (stores) => {
+  if (selectedStore.value !== '' && !stores.some((store) => store.value === selectedStore.value))
+    selectedStore.value = ''
+})
 const isPhysical = ref(false)
+watch(isPhysical, (physical) => {
+  if (physical) selectedStore.value = ''
+})
 const initialName = ref('')
 const isCompleteBox = ref(false)
 const isCollection = ref(false)
 const collectionContents = ref<CollectionContent[]>([])
+const inspectedTmdbId = ref<number | null>(null)
+const inspectedContent = computed(
+  () =>
+    collectionContents.value.find((entry) => entry.tmdbId === inspectedTmdbId.value) ??
+    collectionContents.value[0],
+)
 watch(isCollection, (value) => {
   if (value && !collectionContents.value.length) collectionContents.value = [{ name: '' }]
 })
@@ -72,6 +89,18 @@ const selectedBoardKind = ref(1)
 const baseGames = ref<BoardGameReference[]>([])
 const isTabletopGame = computed(() => form.MediaType === 4)
 const isVideoGame = computed(() => form.MediaType === 3)
+const availablePlatforms = computed(() =>
+  igdbPlatformOptions(
+    props.item?.sourceMetadata?.source === 'IGDB' ? props.item.sourceMetadata.platforms : null,
+  ),
+)
+const savedPlatform = computed(() =>
+  gamePlatforms.find(
+    (platform) =>
+      platform.value === props.item?.platform &&
+      !availablePlatforms.value.some((option) => option.value === platform.value),
+  ),
+)
 const isPcGame = computed(() => isVideoGame.value && selectedPlatform.value === pcPlatform)
 const hasMediaFormat = computed(() => form.MediaType === 1 || form.MediaType === 2)
 const formCategory = computed(
@@ -84,22 +113,55 @@ const { show, dismissMessage } = useSnackbar()
 const pendingSave = ref(false)
 let savedName = ''
 let savedMediaType = 1
+let savedId: number | undefined
 const transitioning = ref(false)
 const trigger = ref<{ $el: HTMLButtonElement } | null>(null)
 const returnFocusTarget = ref<HTMLElement | null>(null)
 const posterFailed = ref(false)
-const editPosterUrl = computed(() => (props.item ? itemCoverUrl(props.item) : null))
+const previewItem = computed(() => {
+  if (!props.item || !isCollection.value) return props.item
+  const cover = inspectedContent.value
+  return { ...props.item, tmdbId: cover?.tmdbId ?? null, posterPath: cover?.posterPath ?? null }
+})
+const editPosterUrl = computed(() => (previewItem.value ? itemCoverUrl(previewItem.value) : null))
+const editSourceUrl = computed(() =>
+  previewItem.value ? itemSourceUrl(previewItem.value) : undefined,
+)
+const editMetadata = computed(() =>
+  isCollection.value
+    ? (inspectedContent.value?.sourceMetadata ??
+      (inspectedContent.value?.tmdbId === props.item?.tmdbId ? props.item?.sourceMetadata : null))
+    : props.item?.sourceMetadata,
+)
+watch(editPosterUrl, () => {
+  posterFailed.value = false
+})
 
 function finishClose() {
   transitioning.value = false
-  nextTick(() => (returnFocusTarget.value ?? trigger.value?.$el)?.focus())
-  if (!pendingSave.value) return
+  nextTick(() => {
+    const target = [
+      returnFocusTarget.value,
+      trigger.value?.$el,
+      document.querySelector<HTMLElement>('.brand'),
+    ].find((element) => element?.isConnected)
+    target?.focus()
+  })
+  if (!pendingSave.value) {
+    emit('closed')
+    return
+  }
   pendingSave.value = false
   Object.assign(form, { MediaType: 1, Name: '', MediaFormat: 1, Info: '' })
-  show(itemNoticeKey(props.item ? 'updated' : 'saved', savedMediaType), 'success', {
-    name: savedName,
-  })
-  emit('saved')
+  show(
+    itemNoticeKey(props.item ? 'updated' : 'saved', savedMediaType),
+    'success',
+    {
+      name: savedName,
+    },
+    savedId,
+  )
+  emit('closed')
 }
 
 function optionLabel(option: { value: number; label: string }) {
@@ -107,6 +169,10 @@ function optionLabel(option: { value: number; label: string }) {
 }
 
 function prepareForm() {
+  inspectedTmdbId.value =
+    props.item?.tmdbId !== props.item?.collectionContents?.[0]?.tmdbId
+      ? (props.item?.tmdbId ?? null)
+      : null
   isCollection.value = props.item?.isCollection ?? false
   collectionContents.value = props.item?.collectionContents?.map((entry) => ({ ...entry })) ?? []
   selectedBoardKind.value = props.item ? (boardGameKind(props.item) ?? 99) : 1
@@ -133,7 +199,7 @@ function prepareForm() {
   dismissMessage(error.value)
   error.value = ''
   selectedPlatform.value = props.item?.platform ?? ''
-  selectedStore.value = props.item?.store ?? ''
+  selectedStore.value = props.item?.isPhysical ? '' : (props.item?.store ?? '')
   isPhysical.value = props.item?.isPhysical ?? false
   selectedBoardFormat.value =
     props.item?.mediaType === 4 &&
@@ -200,13 +266,16 @@ async function save() {
               ? form.MediaFormat
               : null,
           ...(isVideoGame.value ? { Platform: selectedPlatform.value } : {}),
-          ...(isVideoGame.value && selectedStore.value !== ''
+          ...(isVideoGame.value && !isPhysical.value && selectedStore.value !== ''
             ? { Store: selectedStore.value }
             : {}),
           ...(isVideoGame.value ? { IsPhysical: isPhysical.value } : {}),
           ...(hasMediaFormat.value && (isCollection.value || props.item?.isCollection)
             ? {
                 IsCollection: isCollection.value,
+                ...(isCollection.value && inspectedContent.value?.tmdbId
+                  ? { CoverTmdbId: inspectedContent.value.tmdbId }
+                  : {}),
                 CollectionContents: isCollection.value
                   ? collectionContents.value.map((entry) => ({
                       Name: entry.name.trim(),
@@ -243,10 +312,14 @@ async function save() {
       )
       return
     }
+    const saved = await response.json().catch(() => null)
+    savedId =
+      props.item?.id ?? (Number.isSafeInteger(saved?.id) && saved.id > 0 ? saved.id : undefined)
     savedName = requestedName
     savedMediaType = requestedMediaType
     pendingSave.value = true
     open.value = false
+    emit('saved')
   } catch {
     reportError('itemForm.saveError')
   } finally {
@@ -334,7 +407,7 @@ function reportError(message: string) {
                 :class="{ 'item-dialog-body-with-details': !!item?.sourceMetadata }"
               >
                 <div
-                  v-if="editPosterUrl || item?.sourceMetadata"
+                  v-if="editPosterUrl || editMetadata"
                   class="item-dialog-source"
                   :class="{ 'item-dialog-source-with-poster': editPosterUrl && !posterFailed }"
                 >
@@ -342,17 +415,17 @@ function reportError(message: string) {
                     v-if="editPosterUrl && !posterFailed"
                     v-slot="{ describedby }"
                     :text="item ? t(itemSourceTooltip(item)) : ''"
-                    :disabled="!item || !itemSourceUrl(item)"
+                    :disabled="!editSourceUrl"
                     class="cover-tooltip item-dialog-cover-tooltip"
                   >
                     <component
-                      :is="item && itemSourceUrl(item) ? 'a' : 'span'"
+                      :is="editSourceUrl ? 'a' : 'span'"
                       :aria-describedby="describedby"
-                      :href="item && itemSourceUrl(item)"
-                      :target="item && itemSourceUrl(item) ? '_blank' : undefined"
-                      :rel="item && itemSourceUrl(item) ? 'noopener noreferrer' : undefined"
+                      :href="editSourceUrl"
+                      :target="editSourceUrl ? '_blank' : undefined"
+                      :rel="editSourceUrl ? 'noopener noreferrer' : undefined"
                       :aria-label="
-                        item && itemSourceUrl(item)
+                        item && editSourceUrl
                           ? t('sourceMetadata.openSource', {
                               name: displayItemName(item, locale),
                               source: itemSourceName(item),
@@ -361,21 +434,29 @@ function reportError(message: string) {
                       "
                       class="item-dialog-cover-link"
                     >
-                      <img
-                        class="item-dialog-poster"
+                      <FadingCover
+                        mode="out-in"
+                        image-class="item-dialog-poster"
                         :src="editPosterUrl"
                         :alt="item ? displayItemName(item, locale) : ''"
-                        width="120"
-                        height="180"
-                        @error="posterFailed = true"
+                        :width="120"
+                        :height="180"
+                        @error="
+                          (source) => {
+                            if (source === editPosterUrl) posterFailed = true
+                          }
+                        "
                       />
                     </component>
                   </ToolbarTooltip>
-                  <CollectionSourceDetails
-                    v-if="item?.sourceMetadata"
-                    :metadata="item.sourceMetadata"
-                    :media-type="item.mediaType"
-                  />
+                  <Transition name="details-fade" mode="out-in">
+                    <CollectionSourceDetails
+                      v-if="editMetadata"
+                      :key="isCollection ? (inspectedContent?.tmdbId ?? 'single') : 'single'"
+                      :metadata="editMetadata"
+                      :media-type="form.MediaType"
+                    />
+                  </Transition>
                 </div>
                 <form
                   class="item-form"
@@ -407,6 +488,8 @@ function reportError(message: string) {
                     <MediaCollectionContents
                       v-if="hasMediaFormat && isCollection"
                       v-model="collectionContents"
+                      :inspected-tmdb-id="inspectedContent?.tmdbId"
+                      @inspect="inspectedTmdbId = $event.tmdbId ?? null"
                     />
                     <BoardGameFields
                       v-if="isTabletopGame"
@@ -420,8 +503,13 @@ function reportError(message: string) {
                       <span>{{ t('itemForm.platform') }}</span>
                       <select v-model.number="selectedPlatform" name="Platform" required>
                         <option value="" disabled>{{ t('itemForm.choosePlatform') }}</option>
+                        <option v-if="savedPlatform" :value="savedPlatform.value" disabled>
+                          {{
+                            t('itemForm.currentPlatform', { platform: optionLabel(savedPlatform) })
+                          }}
+                        </option>
                         <option
-                          v-for="platform in gamePlatforms"
+                          v-for="platform in availablePlatforms"
                           :key="platform.value"
                           :value="platform.value"
                         >
@@ -478,6 +566,7 @@ function reportError(message: string) {
                       <select
                         v-model.number="selectedStore"
                         name="Store"
+                        :disabled="isPhysical || selectedPlatform === ''"
                         :required="isPcGame && !isPhysical"
                       >
                         <option value="">
@@ -489,7 +578,11 @@ function reportError(message: string) {
                             )
                           }}
                         </option>
-                        <option v-for="store in gameStores" :key="store.value" :value="store.value">
+                        <option
+                          v-for="store in availableStores"
+                          :key="store.value"
+                          :value="store.value"
+                        >
                           {{ optionLabel(store) }}
                         </option>
                       </select>

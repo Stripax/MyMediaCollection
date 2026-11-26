@@ -1,0 +1,24 @@
+.details-fade-enter-active,
+.details-fade-leave-active,
+.fading-cover-sequential > .cover-fade-enter-active,
+.fading-cover-sequential > .cover-fade-leave-active {
+  transition: opacity 200ms ease-in-out;
+}
+
+.details-fade-leave-active {
+  pointer-events: none;
+}
+
+.details-fade-enter-from,
+.details-fade-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .details-fade-enter-active,
+  .details-fade-leave-active,
+  .fading-cover-sequential > .cover-fade-enter-active,
+  .fading-cover-sequential > .cover-fade-leave-active {
+    transition: none;
+  }
+}
