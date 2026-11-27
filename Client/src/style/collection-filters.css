@@ -1,0 +1,137 @@
+.collection-filters {
+  min-width: 0;
+  margin: 0 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.collection-filters-heading {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.collection-filters-tooltip {
+  display: flex;
+  width: 100%;
+}
+
+.collection-filters-tooltip .toolbar-tooltip-content {
+  top: auto;
+  bottom: calc(100% + 0.625rem);
+  left: 1rem;
+  transform: none;
+  max-width: calc(100vw - 8rem);
+  white-space: normal;
+  font-weight: 400;
+}
+
+.collection-filters-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+
+.collection-filters-toggle svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  transition: transform 240ms ease-in-out;
+}
+
+.collection-filters-arrow-expanded {
+  transform: rotate(180deg);
+}
+
+.collection-filters-panel {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.collection-filters-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.collection-filter-fields {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0 1rem 1rem;
+  border: 0;
+}
+
+.collection-filters-expand-enter-active,
+.collection-filters-expand-leave-active {
+  transition:
+    grid-template-rows 240ms ease-in-out,
+    opacity 240ms ease-in-out;
+}
+
+.collection-filters-expand-leave-active {
+  pointer-events: none;
+}
+
+.collection-filters-expand-enter-from,
+.collection-filters-expand-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.collection-filters label {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: 0.5rem;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.collection-filters select {
+  width: 100%;
+  min-width: 0;
+  font-weight: 400;
+}
+
+.collection-filter-hint {
+  flex: 1 1 16rem;
+  margin: 0;
+  align-self: center;
+  line-height: 1.5;
+}
+
+.collection-filters button {
+  transition:
+    background-color var(--interaction-color-duration, 200ms) ease,
+    border-color var(--interaction-color-duration, 200ms) ease,
+    color var(--interaction-color-duration, 200ms) ease;
+}
+
+.collection-filters button:hover:not(:disabled):not(.select-control-trigger) {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.collection-filters button:disabled {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collection-filters button,
+  .collection-filters-toggle svg,
+  .collection-filters-expand-enter-active,
+  .collection-filters-expand-leave-active {
+    transition: none;
+  }
+}

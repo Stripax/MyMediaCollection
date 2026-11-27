@@ -5,8 +5,13 @@ import { useSnackbar } from '../composables/useSnackbar'
 import CollectionTable from '../components/CollectionTable.vue'
 import type { CollectionCategory, CollectionItem } from '../models/collection'
 import { useCollectionRefresh } from '../composables/useCollectionRefresh'
+import { useRouter } from 'vue-router'
 
 const { t } = useI18n({ useScope: 'global' })
+const router = useRouter()
+function openCategory(category: CollectionCategory) {
+  router.push({ name: 'collection', params: { category } })
+}
 const { show, dismissMessage } = useSnackbar()
 defineProps<{ category: CollectionCategory }>()
 const items = ref<CollectionItem[]>([])
@@ -50,5 +55,6 @@ onBeforeUnmount(() => activeRequest?.abort())
     :error="loadError"
     @retry="loadCollection"
     @changed="loadCollection"
+    @category-selected="openCategory"
   />
 </template>

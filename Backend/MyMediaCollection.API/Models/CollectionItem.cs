@@ -3,6 +3,9 @@ namespace MyMediaCollection.API.Models;
 public sealed record CollectionItem
 {
     public long Id { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool VersionAdded { get; init; }
+    public IReadOnlyList<CollectionVersion> Versions { get; init; } = [];
     public string Name { get; init; } = string.Empty;
     public bool IsNameCustom { get; init; } = true;
     public IReadOnlyDictionary<string, string>? LocalizedTitles { get; init; }

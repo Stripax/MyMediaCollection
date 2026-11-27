@@ -21,30 +21,14 @@
   text-overflow: ellipsis;
 }
 .media-format-badge[data-media-format='3'] {
-  --format-badge-color: #991b1b;
+  --format-badge-color: var(--theme-tag-red);
 }
 .media-format-badge[data-media-format='2'] {
-  --format-badge-color: #1e40af;
+  --format-badge-color: var(--theme-tag-blue);
 }
 .media-format-badge[data-media-format='1'] {
-  --format-badge-color: #374151;
+  --format-badge-color: var(--theme-tag-gray);
 }
 .media-format-badge[data-media-format='99'] {
-  --format-badge-color: #6b21a8;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .media-format-badge[data-media-format='3'] {
-  --format-badge-color: #fca5a5;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .media-format-badge[data-media-format='2'] {
-  --format-badge-color: #93c5fd;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .media-format-badge[data-media-format='1'] {
-  --format-badge-color: #cbd5e1;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .media-format-badge[data-media-format='99'] {
-  --format-badge-color: #d8b4fe;
+  --format-badge-color: var(--theme-tag-purple);
 }

@@ -1,5 +1,5 @@
 .tmdb-dialog {
-  max-width: 48rem;
+  max-width: 72rem;
 }
 .tmdb-category {
   margin: 0;
@@ -76,6 +76,12 @@
   display: flex;
   align-items: flex-start;
   gap: 1rem;
+}
+
+.tmdb-selected > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .tmdb-selected img {
   width: 92px;

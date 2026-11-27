@@ -1,6 +1,6 @@
 .info-btn-glass {
-  --info-color: #2563eb;
-  --info-tint: #3b82f6;
+  --info-color: var(--theme-info-color);
+  --info-tint: var(--theme-info-tint);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -21,16 +21,11 @@
   cursor: pointer;
   box-shadow: 0 2px 6px #2563eb26;
   transition:
-    background-color 250ms ease,
-    border-color 250ms ease,
-    color 250ms ease,
+    background-color var(--interaction-color-duration, 250ms) ease,
+    border-color var(--interaction-color-duration, 250ms) ease,
+    color var(--interaction-color-duration, 250ms) ease,
     transform 250ms ease,
-    box-shadow 250ms ease;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .info-btn-glass {
-  --info-color: #93c5fd;
-  --info-tint: #60a5fa;
+    box-shadow var(--interaction-color-duration, 250ms) ease;
 }
 
 .info-btn-glass[aria-pressed='true'] {

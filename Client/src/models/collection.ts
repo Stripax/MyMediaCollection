@@ -118,7 +118,38 @@ export interface CollectionSourceMetadata {
   seasons?: TmdbSeason[]
 }
 
+export interface CollectionVersion {
+  deletionToken?: string
+  id: number
+  mediaFormat: number | null
+  platform?: number | null
+  store?: number | null
+  isPhysical?: boolean | null
+  isCompleteBox?: boolean
+  ownedSeasons?: OwnedSeason[]
+  info: string | null
+}
+
+export function itemVersions(item: CollectionItem): CollectionVersion[] {
+  return item.versions?.length ? item.versions : [{ ...item, id: 0 }]
+}
+
+export function hasIndividualSeasons(version: CollectionVersion): boolean {
+  return !version.isCompleteBox && !!version.ownedSeasons?.length
+}
+
+export function versionFormats(version: CollectionVersion): (number | null)[] {
+  return [
+    ...new Set(
+      version.ownedSeasons?.length
+        ? version.ownedSeasons.map((season) => season.mediaFormat)
+        : [version.mediaFormat],
+    ),
+  ]
+}
+
 export interface CollectionItem {
+  versions?: CollectionVersion[]
   id: number
   name: string
   isNameCustom?: boolean

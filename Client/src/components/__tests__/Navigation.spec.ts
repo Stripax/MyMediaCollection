@@ -34,6 +34,7 @@ beforeEach(() => {
 
 afterEach(() => {
   wrapper?.unmount()
+  useSnackbar().dismiss()
   document.body.innerHTML = ''
   document.title = originalTitle
   document.documentElement.lang = ''
@@ -49,7 +50,7 @@ async function mountAt(path = '/') {
     attachTo: document.body,
     global: {
       plugins: [createI18n({ legacy: false, locale: 'fi', messages: { en, fi } }), router],
-      stubs: { 'transition-group': false, transition: false },
+      stubs: { 'transition-group': false, transition: false, VersionHistoryDialog: true },
     },
   })
   await flushPromises()
@@ -166,7 +167,7 @@ describe('Home and collection navigation', () => {
     document.querySelector<HTMLButtonElement>('.snackbar-item-link')!.click()
     await flushPromises()
     expect(document.querySelector('[role="dialog"]')).not.toBeNull()
-    expect(useSnackbar().notices.value).toHaveLength(0)
+    await vi.waitFor(() => expect(useSnackbar().notices.value).toHaveLength(0))
     await vi.waitFor(() => expect(document.querySelector('.snackbar-item-link')).toBeNull())
     document.querySelector<HTMLButtonElement>('.item-dialog-cancel')!.click()
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
@@ -229,25 +230,33 @@ describe('Home and collection navigation', () => {
 
   it('supports direct category URLs and browser back and forward navigation', async () => {
     const { app, router } = await mountAt('/collection/movies')
-    expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
-      'Elokuva',
+    await vi.waitFor(() =>
+      expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
+        'Elokuva',
+      ),
     )
     await app.findAll('.side-bar-category')[2]!.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe('/collection/tvSeries')
-    expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
-      'Sarja',
+    await vi.waitFor(() =>
+      expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
+        'Sarja',
+      ),
     )
     router.back()
     await flushPromises()
-    expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
-      'Elokuva',
+    await vi.waitFor(() =>
+      expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
+        'Elokuva',
+      ),
     )
     expect(app.findAll('.side-bar-category')[1]!.attributes('aria-pressed')).toBe('true')
     router.forward()
     await flushPromises()
-    expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
-      'Sarja',
+    await vi.waitFor(() =>
+      expect(app.get('tbody tr:not([aria-hidden="true"]) .collection-name-button').text()).toBe(
+        'Sarja',
+      ),
     )
     expect(fetch).toHaveBeenCalledTimes(1)
   })

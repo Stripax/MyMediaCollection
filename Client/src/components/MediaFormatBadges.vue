@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { mediaFormats, otherOption, type CollectionItem } from '../models/collection'
+import {
+  mediaFormats,
+  otherOption,
+  itemVersions,
+  hasIndividualSeasons,
+  versionFormats,
+  type CollectionItem,
+} from '../models/collection'
 const props = defineProps<{ item: CollectionItem }>()
 const { t } = useI18n({ useScope: 'global' })
-const formats = computed(() =>
-  props.item.mediaType === 2 && !props.item.isCollection && props.item.ownedSeasons?.length
-    ? [...new Set(props.item.ownedSeasons.map((season) => season.mediaFormat))]
-    : [props.item.mediaFormat],
-)
+const formats = computed(() => [...new Set(itemVersions(props.item).flatMap(versionFormats))])
 function label(value: number | null) {
   return value === otherOption
     ? t('common.other')
@@ -21,9 +24,20 @@ function label(value: number | null) {
       t('mediaCollection.label')
     }}</span>
     <span
-      v-if="item.mediaType === 2 && !item.isCollection && item.isCompleteBox"
+      v-if="
+        item.mediaType === 2 &&
+        !item.isCollection &&
+        itemVersions(item).some((version) => version.isCompleteBox)
+      "
       class="media-format-badge media-complete-box-badge"
       >{{ t('tvOwnership.completeBoxShort') }}</span
+    >
+    <span
+      v-if="
+        item.mediaType === 2 && !item.isCollection && itemVersions(item).some(hasIndividualSeasons)
+      "
+      class="media-format-badge media-individual-seasons-badge"
+      >{{ t('tvOwnership.individualSeasons') }}</span
     >
     <span
       v-for="format in formats"

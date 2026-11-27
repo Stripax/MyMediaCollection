@@ -41,6 +41,252 @@ afterEach(() => {
 })
 
 describe('Collection item dialog', () => {
+  it.each(['fi', 'en'])(
+    'confirms removal of the selected platform and keeps the editor open on cancel in %s',
+    async (locale) => {
+      const request = vi.fn()
+      vi.stubGlobal('fetch', request)
+      const dialog = await openForm(locale, {
+        id: 12,
+        name: 'Destiny 2',
+        mediaType: 3,
+        mediaFormat: null,
+        platform: 4,
+        info: null,
+        versions: [
+          { id: 0, deletionToken: 'original', mediaFormat: null, platform: 4, info: null },
+          { id: 20, deletionToken: 'ps-token', mediaFormat: null, platform: 9, info: null },
+        ],
+      })
+      await dialog.get('select[name="VersionId"]').setValue('20')
+      const control = dialog.get('.collection-version-control')
+      const remove = control.get('.collection-version-delete')
+      expect(remove.text()).toBe('')
+      expect(remove.find('svg').exists()).toBe(true)
+      expect(remove.attributes('aria-label')).toBe(
+        (locale === 'fi' ? fi : en).versionDelete.platform,
+      )
+      await control.get('.collection-version-delete-tooltip').trigger('mouseenter')
+      expect(control.get('[role="tooltip"]').text()).toBe(
+        (locale === 'fi' ? fi : en).versionDelete.platform,
+      )
+      await remove.trigger('click')
+      await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull())
+      const confirmation = new DOMWrapper(
+        document.querySelector<HTMLElement>('[role="alertdialog"]')!,
+      )
+      expect(confirmation.text()).toContain('Destiny 2')
+      expect(confirmation.text()).toContain('PlayStation 5')
+      expect(dialog.get('fieldset').attributes('disabled')).toBeDefined()
+      await confirmation.get('.item-dialog-cancel').trigger('click')
+      await vi.waitFor(() => expect(dialog.get('fieldset').attributes('disabled')).toBeUndefined())
+      expect(dialog.attributes('data-state')).toBe('open')
+      expect((dialog.get('select[name="VersionId"]').element as HTMLSelectElement).value).toBe('20')
+      expect(request).not.toHaveBeenCalled()
+      expect(wrapper!.emitted('saved')).toBeUndefined()
+    },
+  )
+
+  it('removes only the selected format and closes the editor after confirmation', async () => {
+    const request = vi.fn().mockResolvedValue(new Response('{"id":12}'))
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('fi', {
+      id: 12,
+      name: 'Movie',
+      mediaType: 1,
+      mediaFormat: 2,
+      info: null,
+      versions: [
+        { id: 0, deletionToken: 'original', mediaFormat: 2, info: null },
+        { id: 21, deletionToken: 'uhd-token', mediaFormat: 3, info: null },
+      ],
+    })
+    await dialog.get('select[name="VersionId"]').setValue('21')
+    await dialog.get('.collection-version-delete').trigger('click')
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull())
+    const confirmation = new DOMWrapper(
+      document.querySelector<HTMLElement>('[role="alertdialog"]')!,
+    )
+    expect(confirmation.text()).toContain('4K UHD Blu-ray')
+    expect(request).not.toHaveBeenCalled()
+    await confirmation.get('.collection-version-delete-confirm').trigger('click')
+    await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
+    expect(request).toHaveBeenCalledExactlyOnceWith('/api/collection/12/versions/21', {
+      method: 'DELETE',
+      headers: { 'If-Match': '"uhd-token"' },
+    })
+    expect(dialog.attributes('data-state')).toBe('closed')
+    expect(useSnackbar().notice.value).toMatchObject({
+      messageKey: 'versionDelete.success',
+      type: 'success',
+      itemId: 12,
+      params: { name: 'Movie', version: '4K UHD Blu-ray' },
+    })
+  })
+
+  it('keeps both dialogs and their values when a version deletion fails', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ code: 'collection_version_changed' }), { status: 412 }),
+      )
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('en', {
+      id: 12,
+      name: 'Movie',
+      mediaType: 1,
+      mediaFormat: 2,
+      info: null,
+      versions: [
+        { id: 0, deletionToken: 'original', mediaFormat: 2, info: null },
+        { id: 21, deletionToken: 'uhd-token', mediaFormat: 3, info: null },
+      ],
+    })
+    await dialog.get('textarea[name="Info"]').setValue('Unsaved notes')
+    await dialog.get('.collection-version-delete').trigger('click')
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull())
+    const confirmation = new DOMWrapper(
+      document.querySelector<HTMLElement>('[role="alertdialog"]')!,
+    )
+    await confirmation.get('.collection-version-delete-confirm').trigger('click')
+    await vi.waitFor(() =>
+      expect(confirmation.get('[role="alert"]').text()).toBe(en.versionDelete.changed),
+    )
+    expect(dialog.attributes('data-state')).toBe('open')
+    expect(confirmation.attributes('data-state')).toBe('open')
+    expect((dialog.get('textarea[name="Info"]').element as HTMLTextAreaElement).value).toBe(
+      'Unsaved notes',
+    )
+    expect(wrapper!.emitted('saved')).toBeUndefined()
+    expect(useSnackbar().notice.value?.type).toBe('error')
+  })
+
+  it('offers whole-item deletion rather than version deletion for the last version', async () => {
+    const dialog = await openForm('fi', {
+      id: 12,
+      name: 'Movie',
+      mediaType: 1,
+      mediaFormat: 2,
+      info: null,
+      versions: [{ id: 0, deletionToken: 'original', mediaFormat: 2, info: null }],
+    })
+    expect(dialog.find('.collection-version-delete').exists()).toBe(false)
+  })
+
+  it('edits the chosen platform version while preserving the original platform', async () => {
+    const request = vi.fn().mockResolvedValue(new Response('{"id":12}'))
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('fi', {
+      id: 12,
+      name: 'Destiny 2',
+      mediaType: 3,
+      mediaFormat: null,
+      platform: 4,
+      isPhysical: true,
+      info: 'Xbox notes',
+      versions: [
+        { id: 0, mediaFormat: null, platform: 4, isPhysical: true, info: 'Xbox notes' },
+        {
+          id: 20,
+          mediaFormat: null,
+          platform: 9,
+          store: 10,
+          isPhysical: false,
+          info: 'PlayStation notes',
+        },
+      ],
+    })
+    expect(
+      dialog
+        .get('select[name="VersionId"]')
+        .findAll('option')
+        .map((option) => option.text()),
+    ).toEqual(['Xbox Series S/X', 'PlayStation 5'])
+    await dialog.get('select[name="VersionId"]').setValue('20')
+    expect((dialog.get('select[name="Platform"]').element as HTMLSelectElement).value).toBe('9')
+    expect((dialog.get('select[name="Store"]').element as HTMLSelectElement).value).toBe('10')
+    expect((dialog.get('textarea[name="Info"]').element as HTMLTextAreaElement).value).toBe(
+      'PlayStation notes',
+    )
+    await dialog.get('textarea[name="Info"]').setValue('Edited PS notes')
+    await dialog.get('form').trigger('submit')
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce())
+    const body = JSON.parse(request.mock.calls[0]![1].body)
+    expect(body).toMatchObject({
+      VersionId: 20,
+      Platform: 9,
+      Store: 10,
+      IsPhysical: false,
+      Info: 'Edited PS notes',
+    })
+    await vi.waitFor(() => expect(dialog.attributes('data-state')).toBe('closed'))
+    await vi.waitFor(() => expect(useSnackbar().notice.value?.type).toBe('success'))
+  })
+
+  it('switches back to the original version and restores its own fields', async () => {
+    const dialog = await openForm('en', {
+      id: 12,
+      name: 'Movie',
+      mediaType: 1,
+      mediaFormat: 2,
+      info: 'Blu-ray notes',
+      versions: [
+        { id: 0, mediaFormat: 2, info: 'Blu-ray notes' },
+        { id: 21, mediaFormat: 3, info: 'UHD notes' },
+      ],
+    })
+    await dialog.get('select[name="VersionId"]').setValue('21')
+    expect((dialog.get('select[name="MediaFormat"]').element as HTMLSelectElement).value).toBe('3')
+    expect((dialog.get('textarea[name="Info"]').element as HTMLTextAreaElement).value).toBe(
+      'UHD notes',
+    )
+    await dialog.get('select[name="VersionId"]').setValue('0')
+    expect((dialog.get('select[name="MediaFormat"]').element as HTMLSelectElement).value).toBe('2')
+    expect((dialog.get('textarea[name="Info"]').element as HTMLTextAreaElement).value).toBe(
+      'Blu-ray notes',
+    )
+  })
+
+  it.each(['fi', 'en'])(
+    'reports a duplicate without closing or resetting the form in %s',
+    async (locale) => {
+      const labels = locale === 'fi' ? fi : en
+      const request = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            code: 'collection_duplicate',
+            name: 'Owned movie',
+            existingItemId: 12,
+          }),
+          { status: 409 },
+        ),
+      )
+      vi.stubGlobal('fetch', request)
+      const dialog = await openForm(locale, undefined, 'movies')
+      await dialog.get('input[name="Name"]').setValue('New title')
+      await dialog.get('select[name="MediaFormat"]').setValue('2')
+      await dialog.get('textarea[name="Info"]').setValue('Keep my notes')
+      await dialog.get('form').trigger('submit')
+      await vi.waitFor(() =>
+        expect(dialog.get('.item-form-error').text()).toBe(
+          labels.itemForm.duplicate.replace('{name}', 'Owned movie'),
+        ),
+      )
+      expect(dialog.attributes('data-state')).toBe('open')
+      expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe('New title')
+      expect((dialog.get('textarea[name="Info"]').element as HTMLTextAreaElement).value).toBe(
+        'Keep my notes',
+      )
+      expect(useSnackbar().notice.value).toMatchObject({
+        type: 'error',
+        messageKey: 'itemForm.duplicate',
+        params: { name: 'Owned movie' },
+      })
+      expect(wrapper!.emitted('saved')).toBeUndefined()
+      expect(request).toHaveBeenCalledTimes(1)
+    },
+  )
+
   it('adds a TMDB member through the existing search dialog without creating a separate item', async () => {
     const movie = {
       tmdbId: 703,
@@ -407,13 +653,15 @@ describe('Collection item dialog', () => {
     expect(JSON.parse(request.mock.calls[0]![1].body).Platform).toBe(8)
   })
 
-  it.each(['movies', 'tvSeries'] as const)(
+  it.each(['movies'] as const)(
     'adds a manual %s collection with one shared format',
     async (category) => {
       const request = vi.fn().mockResolvedValue(new Response('{}', { status: 201 }))
       vi.stubGlobal('fetch', request)
       const dialog = await openForm('fi', undefined, category)
-      expect(dialog.findAll('label > span')[0]!.text()).toBe(fi.mediaCollection.label)
+      expect(dialog.findAll('label > span:not(.select-control)')[0]!.text()).toBe(
+        fi.mediaCollection.label,
+      )
       await dialog.get('input[name="IsCollection"]').setValue(true)
       await dialog.get('input[name="Name"]').setValue('Oma boksi')
       await dialog.get('input[name="CollectionContent-0"]').setValue('Ensimmäinen')
@@ -433,6 +681,23 @@ describe('Collection item dialog', () => {
       })
     },
   )
+
+  it('adds TV series with season ownership rather than a collection checkbox', async () => {
+    const request = vi.fn().mockResolvedValue(new Response('{"id":12}', { status: 201 }))
+    vi.stubGlobal('fetch', request)
+    const dialog = await openForm('fi', undefined, 'tvSeries')
+    expect(dialog.find('input[name="IsCollection"]').exists()).toBe(false)
+    await dialog.get('input[name="Name"]').setValue('Series')
+    await dialog.get('input[name="SeasonCount"]').setValue('2')
+    await dialog.get('input[name="IsCompleteBox"]').setValue(true)
+    await dialog.get('form').trigger('submit')
+    expect(JSON.parse(request.mock.calls[0]![1].body)).toMatchObject({
+      MediaType: 2,
+      IsCompleteBox: true,
+    })
+    expect(JSON.parse(request.mock.calls[0]![1].body).IsCollection).toBeUndefined()
+    await vi.waitFor(() => expect(useSnackbar().notice.value?.type).toBe('success'))
+  })
 
   it('edits imported collection contents while retaining their source references', async () => {
     const request = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
@@ -472,7 +737,9 @@ describe('Collection item dialog', () => {
       vi.stubGlobal('fetch', request)
       const labels = locale === 'fi' ? fi : en
       const dialog = await openForm(locale, undefined, 'boardGames')
-      expect(dialog.findAll('label > span').map((label) => label.text())).toEqual([
+      expect(
+        dialog.findAll('label > span:not(.select-control)').map((label) => label.text()),
+      ).toEqual([
         labels.itemForm.name,
         labels.bgg.classification,
         labels.itemForm.gameType,
@@ -867,7 +1134,9 @@ describe('Collection item dialog', () => {
     const dialog = await openForm(locale)
     const labels = locale === 'fi' ? fi : en
     expect(dialog.get('.item-dialog-title').text()).toBe(labels.collection.add.movies)
-    expect(dialog.findAll('label > span').map((label) => label.text())).toEqual([
+    expect(
+      dialog.findAll('label > span:not(.select-control)').map((label) => label.text()),
+    ).toEqual([
       labels.itemForm.category,
       labels.mediaCollection.label,
       labels.itemForm.name,
@@ -901,7 +1170,7 @@ describe('Collection item dialog', () => {
     expect((dialog.get('select[name="MediaType"]').element as HTMLSelectElement).value).toBe('2')
     expect((dialog.get('select[name="MediaFormat"]').element as HTMLSelectElement).value).toBe('3')
 
-    await dialog.get('button').trigger('click')
+    await dialog.get('.item-dialog-cancel').trigger('click')
     await vi.waitFor(() => expect(wrapper!.get('button').attributes('aria-expanded')).toBe('false'))
   })
 
@@ -914,7 +1183,9 @@ describe('Collection item dialog', () => {
       const labels = locale === 'fi' ? fi : en
       await dialog.get('select[name="MediaType"]').setValue('3')
       expect(dialog.find('select[name="MediaFormat"]').exists()).toBe(false)
-      expect(dialog.findAll('label > span')[2]!.text()).toBe(labels.itemForm.platform)
+      expect(dialog.findAll('label > span:not(.select-control)')[2]!.text()).toBe(
+        labels.itemForm.platform,
+      )
       const platformNames = dialog
         .findAll('select[name="Platform"] option')
         .map((option) => option.text())
@@ -967,7 +1238,9 @@ describe('Collection item dialog', () => {
       await dialog.get('select[name="Platform"]').setValue('9')
       expect(dialog.find('select[name="Store"]').exists()).toBe(true)
       await dialog.get('select[name="Platform"]').setValue('26')
-      expect(dialog.findAll('label > span')[3]!.text()).toBe(labels.itemForm.store)
+      expect(dialog.findAll('label > span:not(.select-control)')[3]!.text()).toBe(
+        labels.itemForm.store,
+      )
       expect(dialog.findAll('select[name="Store"] option').map((option) => option.text())).toEqual([
         labels.itemForm.chooseStore,
         'Steam',
@@ -1228,7 +1501,9 @@ describe('Collection item dialog', () => {
       }
       expect((dialog.get('select[name="MediaFormat"]').element as HTMLSelectElement).value).toBe('')
       expect(dialog.find('select[name="Platform"]').exists()).toBe(false)
-      expect(dialog.findAll('label > span').map((label) => label.text())).toEqual([
+      expect(
+        dialog.findAll('label > span:not(.select-control)').map((label) => label.text()),
+      ).toEqual([
         ...(!item ? [fi.itemForm.category] : []),
         fi.itemForm.name,
         fi.bgg.classification,

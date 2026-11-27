@@ -17,46 +17,21 @@
 }
 
 .game-platform-badge[data-platform-family='xbox'] {
-  --platform-badge-color: #166534;
+  --platform-badge-color: var(--theme-tag-green);
 }
 
 .game-platform-badge[data-platform-family='playstation'] {
-  --platform-badge-color: #1e40af;
+  --platform-badge-color: var(--theme-tag-blue);
 }
 
 .game-platform-badge[data-platform-family='nintendo'] {
-  --platform-badge-color: #991b1b;
+  --platform-badge-color: var(--theme-tag-red);
 }
 
 .game-platform-badge[data-platform-family='pc'] {
-  --platform-badge-color: #374151;
+  --platform-badge-color: var(--theme-tag-gray);
 }
 
 .game-platform-badge[data-platform-family='sega'] {
-  --platform-badge-color: #6b21a8;
-}
-
-:root:is([data-theme='dark'], [data-theme='black'])
-  .game-platform-badge[data-platform-family='xbox'] {
-  --platform-badge-color: #86efac;
-}
-
-:root:is([data-theme='dark'], [data-theme='black'])
-  .game-platform-badge[data-platform-family='playstation'] {
-  --platform-badge-color: #93c5fd;
-}
-
-:root:is([data-theme='dark'], [data-theme='black'])
-  .game-platform-badge[data-platform-family='nintendo'] {
-  --platform-badge-color: #fca5a5;
-}
-
-:root:is([data-theme='dark'], [data-theme='black'])
-  .game-platform-badge[data-platform-family='pc'] {
-  --platform-badge-color: #cbd5e1;
-}
-
-:root:is([data-theme='dark'], [data-theme='black'])
-  .game-platform-badge[data-platform-family='sega'] {
-  --platform-badge-color: #d8b4fe;
+  --platform-badge-color: var(--theme-tag-purple);
 }

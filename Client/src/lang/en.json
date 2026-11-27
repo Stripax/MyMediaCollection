@@ -17,6 +17,12 @@
     "digitalCopy": "Digital",
     "unknownCopy": "Unknown",
     "category": "Category",
+    "showCategory": {
+      "movies": "Show movies",
+      "tvSeries": "Show TV series",
+      "videoGames": "Show video games",
+      "boardGames": "Show board and card games"
+    },
     "editTitles": {
       "all": "Edit item",
       "movies": "Edit movie",
@@ -38,8 +44,25 @@
     "searchPlaceholder": "Enter an item name…",
     "clearSearch": "Clear search",
     "searchResults": "Search results: {count}",
-    "noMatches": "No matching items were found in the selected category.",
+    "noMatches": "No items match the selected filters or search.",
     "actions": "Actions",
+    "sortNameAscending": "Name: sort A–Z",
+    "sortNameDescending": "Name: sort Z–A",
+    "sortNameDefault": "Name: restore default order",
+    "sortCategoryAscending": "Category: sort A–Z",
+    "sortCategoryDescending": "Category: sort Z–A",
+    "sortCategoryDefault": "Category: restore default order",
+    "filters": {
+      "title": "Filters",
+      "show": "Show filters",
+      "hide": "Hide filters",
+      "all": "All",
+      "clear": "Clear filters",
+      "itemType": "Item type",
+      "single": "Single item",
+      "noStore": "No digital store",
+      "categoryHint": "Select a category to see more filters."
+    },
     "showInfo": "Show additional information for {name}",
     "noInfo": "No additional information.",
     "noInfoTooltip": "No additional information",
@@ -121,13 +144,16 @@
     "nameRequired": "Enter a name for the item.",
     "validationError": "Check the name, category, format or platform and the store for PC games. Additional information is limited to 10,000 characters.",
     "saveError": "Saving failed. Check your connection and try again.",
+    "duplicate": "{name} is already in your collection on the same platform or in the same format. No duplicate was saved.",
     "category": "Collection category",
     "name": "Name",
     "mediaFormat": "Format",
     "info": "Additional information",
     "close": "Cancel",
     "isPhysical": "Physical copy",
-    "chooseStoreOptional": "Select a digital store (optional)"
+    "chooseStoreOptional": "Select a digital store (optional)",
+    "version": "Version to edit",
+    "versionAdded": "A new platform or format was added to {name}."
   },
   "sidebar": {
     "categories": "Categories",
@@ -238,7 +264,8 @@
   "tvOwnership": {
     "title": "Owned seasons",
     "completeBox": "Entire series",
-    "completeBoxShort": "Complete box",
+    "completeBoxShort": "Entire series",
+    "individualSeasons": "Individual seasons",
     "help": "Select the seasons you own and the format of each season. The default format is used for newly selected seasons. Entire series selects all known regular seasons.",
     "manualCount": "Number of seasons (for selection)",
     "season": "Season {number}",
@@ -308,5 +335,31 @@
     "contentsRequired": "Add at least one named title to the collection.",
     "searchHint": "Search and select the included movies or series one at a time. Enter the name of your collection in the Name field below.",
     "tooMany": "A collection can contain up to 100 titles."
+  },
+  "versionDelete": {
+    "platform": "Remove selected platform",
+    "format": "Remove selected format",
+    "platformTitle": "Remove platform",
+    "formatTitle": "Remove format",
+    "confirm": "Are you sure you want to remove the {version} version of {name}? The item and its other versions will remain in your collection.",
+    "success": "The {version} version was removed from {name}.",
+    "lastVersion": "The last version cannot be removed separately. Use the table delete button to remove the entire item.",
+    "changed": "The selected version has changed or been removed. Reopen the item editor and try again.",
+    "error": "The version could not be removed. Please try again."
+  },
+  "versionHistory": {
+    "title": "Version history",
+    "introduction": "Add a version number and describe its changes. Previous versions are listed below, newest first.",
+    "number": "Version number",
+    "changes": "Changes",
+    "history": "Previous versions",
+    "empty": "No version history has been added yet.",
+    "loading": "Loading version history…",
+    "loadError": "Version history could not be loaded. Please try again.",
+    "save": "Save",
+    "saved": "Version {version} was saved to version history.",
+    "duplicate": "This version number is already in the version history.",
+    "validationError": "Check the version number and change description.",
+    "saveError": "The version could not be saved. Please try again."
   }
 }

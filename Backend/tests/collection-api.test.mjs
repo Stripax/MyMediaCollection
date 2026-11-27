@@ -50,6 +50,8 @@ test('collection API stores and validates items in an isolated SQLite database',
   database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/011-add-bgg-expansion-details.sql', import.meta.url), 'utf8'))
   database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/012-add-board-game-classification.sql', import.meta.url), 'utf8'))
   database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/013-add-media-collections.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/014-add-collection-versions.sql', import.meta.url), 'utf8'))
+  database.exec(readFileSync(new URL('../MyMediaCollection.API/Data/Migrations/015-add-version-history.sql', import.meta.url), 'utf8'))
   const bggRequests = []
   const igdbRequests = []
   const tokenRequests = []
@@ -333,7 +335,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(response.status, 200)
     const items = await response.json()
     assert.equal(items.length, Number(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count))
-    assert.deepEqual(items[0], { id, name: 'Manually added item', mediaType: 4, mediaFormat: null, platform: null, store: null, info: null, createdAt: null, updatedAt: null, userId: null, tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, bggMetadataId: null, bggId: null, bggImageUrl: null, boardGameKind: 1, baseGames: [], sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [], isCollection: false, collectionContents: [] })
+    assert.deepEqual(items[0], { id, versions: items[0].versions, name: 'Manually added item', mediaType: 4, mediaFormat: null, platform: null, store: null, info: null, createdAt: null, updatedAt: null, userId: null, tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, bggMetadataId: null, bggId: null, bggImageUrl: null, boardGameKind: 1, baseGames: [], sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [], isCollection: false, collectionContents: [] })
     assert.ok(items.every((item, index) => index === 0 || items[index - 1].id > item.id))
     assert.equal(items.at(-1).name, "Yö — O'Brien")
     for (const item of items.slice(1)) {
@@ -545,7 +547,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.ok(Date.parse(updated.updatedAt) >= Date.parse(created.createdAt))
     assert.equal(Date.parse(updated.updatedAt), Date.parse(row.UpdatedAt))
     assert.deepEqual(updated, {
-      id: created.id, name: "Muokattu O'Brien", mediaType: 2, mediaFormat: 3, platform: null, store: null, info: 'Edited\nInfo',
+      id: created.id, versions: updated.versions, name: "Muokattu O'Brien", mediaType: 2, mediaFormat: 3, platform: null, store: null, info: 'Edited\nInfo',
       createdAt: created.createdAt, updatedAt: updated.updatedAt, userId: null,
       tmdbMetadataId: null, tmdbId: null, posterPath: null, igdbMetadataId: null, igdbId: null, coverImageId: null, bggMetadataId: null, bggId: null, bggImageUrl: null, boardGameKind: null, baseGames: [], sourceMetadata: null, isPhysical: null, isNameCustom: true, localizedTitles: null, isCompleteBox: false, ownedSeasons: [], isCollection: false, collectionContents: [],
     })
@@ -639,9 +641,9 @@ test('collection API stores and validates items in an isolated SQLite database',
     }
   })
   await t.test('imports canonical metadata atomically, shares it across copies and preserves the link on edit', async () => {
-    const importItem = (mediaType, language = 'fi-FI') => fetch(`http://127.0.0.1:${port}/api/tmdb/import`, {
+    const importItem = (mediaType, language = 'fi-FI', mediaFormat = 2) => fetch(`http://127.0.0.1:${port}/api/tmdb/import`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tmdbId: 603, language, posterPath: '/untrusted.jpg', item: { name: 'My copy', mediaType, mediaFormat: 2, info: 'Own notes' } }),
+      body: JSON.stringify({ tmdbId: 603, language, posterPath: '/untrusted.jpg', item: { name: 'My copy', mediaType, mediaFormat, info: 'Own notes' } }),
     })
     const first = await importItem(1)
     assert.equal(first.status, 201)
@@ -662,13 +664,21 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(item.sourceMetadata.source, 'TMDB')
     assert.deepEqual(item.sourceMetadata.platforms, [])
     assert.match(metadata.FetchedAt, /Z$/)
-    const copy = await (await importItem(1)).json()
-    assert.notEqual(copy.id, item.id)
+    const duplicate = await importItem(1)
+    assert.equal(duplicate.status, 409)
+    assert.equal((await duplicate.json()).existingItemId, item.id)
+    assert.equal((await importItem(1, 'en-US')).status, 409)
+    const copy = await (await importItem(1, 'fi-FI', 1)).json()
+    assert.equal(copy.id, item.id)
+    assert.equal(copy.versionAdded, true)
+    assert.deepEqual(copy.versions.map(version => version.mediaFormat), [2,1])
     assert.equal(copy.tmdbMetadataId, item.tmdbMetadataId)
     const series = await (await importItem(2)).json()
     assert.notEqual(series.tmdbMetadataId, item.tmdbMetadataId)
-    const english = await (await importItem(1, 'en-US')).json()
-    assert.notEqual(english.tmdbMetadataId, item.tmdbMetadataId)
+    const english = await (await importItem(1, 'en-US', 99)).json()
+    assert.equal(english.id, item.id)
+    assert.equal(english.tmdbMetadataId, item.tmdbMetadataId)
+    assert.deepEqual(english.versions.map(version => version.mediaFormat), [2,1,99])
     const edit = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Edited copy', mediaType: 1, mediaFormat: 3 }) })
     assert.equal(edit.status, 200)
     const updated = await edit.json()
@@ -679,7 +689,7 @@ test('collection API stores and validates items in an isolated SQLite database',
     const listed = (await (await fetch(url)).json()).find(entry => entry.id === item.id)
     assert.equal(listed.posterPath, '/matrix.jpg')
     assert.deepEqual(listed.sourceMetadata, updated.sourceMetadata)
-    assert.equal((await fetch(`${url}/${copy.id}`, { method: 'DELETE' })).status, 204)
+    assert.equal((await fetch(`${url}/${series.id}`, { method: 'DELETE' })).status, 204)
     assert.ok(database.prepare('SELECT Id FROM TmdbMetadata WHERE Id = ?').get(item.tmdbMetadataId))
     const changeCategory = await fetch(`${url}/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Changed category', mediaType: 2, mediaFormat: 3 }) })
     assert.equal((await changeCategory.json()).tmdbMetadataId, null)
@@ -737,7 +747,8 @@ test('collection API stores and validates items in an isolated SQLite database',
       assert.deepEqual(custom.localizedTitles,item.localizedTitles)
     }
     const customImport = await (await importTitle(1,'My imported copy',false)).json()
-    assert.equal(customImport.name,'My imported copy')
+    assert.equal(customImport.name,'My chosen title')
+    assert.equal(customImport.versionAdded,true)
     assert.equal(customImport.isNameCustom,true)
   })
   await t.test('backfills missing legacy title translations without renaming stored items and caches them', async () => {
@@ -857,6 +868,9 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(response.status, 201)
     const item = await response.json()
     assert.equal(item.igdbId, 1942)
+    const duplicate = await importGame(9, 10, true)
+    assert.equal(duplicate.status, 409)
+    assert.equal((await duplicate.json()).existingItemId, item.id)
     assert.equal(item.isPhysical, true)
     assert.equal(item.store, 10)
     assert.equal(item.coverImageId, 'igdb_cover')
@@ -864,7 +878,8 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(item.tmdbMetadataId, null)
     const pc = await (await importGame(26, 1)).json()
     assert.equal(pc.igdbMetadataId, item.igdbMetadataId)
-    assert.equal(pc.store, 1)
+    assert.equal(pc.id, item.id)
+    assert.equal(pc.versions.find(version => version.platform === 26).store, 1)
     const metadata = database.prepare('SELECT * FROM IgdbMetadata WHERE Id = ?').get(item.igdbMetadataId)
     assert.equal(metadata.Title, 'IGDB canonical title')
     assert.equal(metadata.Overview, 'Game overview')
@@ -887,7 +902,6 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(updated.sourceMetadata.overview, 'Game overview')
     assert.equal(updated.sourceMetadata.sourceUrl, item.sourceMetadata.sourceUrl)
     assert.equal((await (await fetch(url)).json()).find(entry => entry.id === item.id).coverImageId, 'igdb_cover')
-    assert.equal((await fetch(`${url}/${item.id}`, {method:'DELETE'})).status, 204)
     assert.ok(database.prepare('SELECT Id FROM IgdbMetadata WHERE Id = ?').get(pc.igdbMetadataId))
     const changeCategory = await fetch(`${url}/${pc.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:'Changed', mediaType:1, mediaFormat:2})})
     assert.equal((await changeCategory.json()).igdbMetadataId, null)
@@ -967,6 +981,9 @@ test('collection API stores and validates items in an isolated SQLite database',
     assert.equal(response.status,201)
     const item=await response.json()
     assert.equal(item.bggId,13)
+    const duplicate = await importGame()
+    assert.equal(duplicate.status, 409)
+    assert.equal((await duplicate.json()).existingItemId, item.id)
     assert.equal(item.bggImageUrl,'https://cf.geekdo-images.com/example/pic123.jpg')
     assert.equal(item.sourceMetadata.source,'BGG')
     assert.equal(item.sourceMetadata.title,'CATAN & friends')
@@ -1140,6 +1157,268 @@ test('collection API stores and validates items in an isolated SQLite database',
     const cleared=await (await edit({boardGameKind:1})).json()
     assert.deepEqual(cleared.baseGames,[])
   })
+  await t.test('rejects normalized manual duplicates and serializes concurrent additions without partial saves', async () => {
+    const before = database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count
+    const responses = await Promise.all([
+      post({name:'  ÄÄNI   duplicate test  ', mediaType:1, mediaFormat:2}),
+      post({name:'A\u0308A\u0308ni duplicate test', mediaType:1, mediaFormat:2, info:'Different notes'}),
+    ])
+    assert.deepEqual(responses.map(response => response.status).sort(), [201,409])
+    const item = await responses.find(response => response.status === 201).json()
+    const duplicate = await responses.find(response => response.status === 409).json()
+    assert.equal(duplicate.code, 'collection_duplicate')
+    assert.equal(duplicate.existingItemId, item.id)
+    assert.equal(duplicate.name, item.name)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count, before + 1)
+    const edited = await fetch(`${url}/${item.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:item.name,mediaType:1,mediaFormat:2,info:'An ordinary edit'})})
+    assert.equal(edited.status,200)
+    const ids = [item.id]
+    for (const fields of [{mediaType:1, mediaFormat:3}, {mediaType:2, mediaFormat:2}]) {
+      const response = await post({name:item.name,...fields})
+      assert.equal(response.status,201)
+      ids.push((await response.json()).id)
+    }
+    for (const id of new Set(ids)) assert.equal((await fetch(`${url}/${id}`,{method:'DELETE'})).status,204)
+  })
+  await t.test('merges game platforms and rejects the same platform regardless of store or copy type', async () => {
+    const count = database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count
+    const bodies = [
+      {platform:26,store:1,isPhysical:false},
+      {platform:4,store:9,isPhysical:false}, {platform:9,store:10,isPhysical:false},
+    ].map(fields => ({name:'Unique ownership variant test',mediaType:3,...fields}))
+    let item
+    for (const body of bodies) {
+      const response=await post(body)
+      assert.equal(response.status,201)
+      const saved=await response.json()
+      if(item) { assert.equal(saved.id,item.id); assert.equal(saved.versionAdded,true) }
+      item=saved
+    }
+    assert.deepEqual(item.versions.map(version=>version.platform),[26,4,9])
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count,count+1)
+    for(const body of [...bodies,{...bodies[0],store:2},{...bodies[0],isPhysical:true,store:null}])
+      assert.equal((await post({...body,info:'Not a different item'})).status,409)
+    assert.equal((await fetch(`${url}/${item.id}`,{method:'DELETE'})).status,204)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionVersions WHERE CollectionItemId=?').get(item.id).count,0)
+  })
+  await t.test('uses provider IDs for imported titles and recognizes manual names against stored provider names', async () => {
+    const importMovie = (id,name) => fetch(url.replace('/collection','/tmdb/import'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tmdbId:id,language:'fi-FI',item:{name,mediaType:1,mediaFormat:99}})})
+    const first = await importMovie(701,'Same remake title')
+    assert.equal(first.status,201)
+    const item=await first.json()
+    assert.equal((await importMovie(701,'A completely different custom title')).status,409)
+    const remake=await importMovie(702,'Same remake title')
+    assert.equal(remake.status,201)
+    const second=await remake.json()
+    assert.equal((await post({name:'  movie   701 ',mediaType:1,mediaFormat:99})).status,409)
+    for(const id of [item.id,second.id]) assert.equal((await fetch(`${url}/${id}`,{method:'DELETE'})).status,204)
+  })
+  await t.test('detects duplicate boxes independently of member order and the chosen cover', async () => {
+    const importBox = (ids,name) => fetch(url.replace('/collection','/tmdb/import'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tmdbId:ids[0],tmdbIds:ids,language:'fi-FI',item:{name,mediaType:1,mediaFormat:2,isCollection:true}})})
+    const first=await importBox([701,702],'Duplicate box test')
+    assert.equal(first.status,201)
+    const item=await first.json()
+    const duplicate=await importBox([702,701],'Another name for the same box')
+    assert.equal(duplicate.status,409)
+    assert.equal((await duplicate.json()).existingItemId,item.id)
+    const single=await fetch(url.replace('/collection','/tmdb/import'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tmdbId:701,language:'fi-FI',item:{name:'Standalone member',mediaType:1,mediaFormat:2}})})
+    assert.equal(single.status,201)
+    const member=await single.json()
+    for(const id of [item.id,member.id]) assert.equal((await fetch(`${url}/${id}`,{method:'DELETE'})).status,204)
+  })
+  await t.test('merges TV formats, preserves their seasons and rejects an already owned format', async () => {
+    const body={name:'Unique season ownership test',mediaType:2,mediaFormat:2,ownedSeasons:[{seasonNumber:1,mediaFormat:2}]}
+    const first=await post(body)
+    assert.equal(first.status,201)
+    const item=await first.json()
+    assert.equal((await post({...body,mediaFormat:3})).status,409)
+    assert.equal((await post({...body,ownedSeasons:[{seasonNumber:2,mediaFormat:2}]})).status,409)
+    const response=await post({...body,mediaFormat:3,ownedSeasons:[{seasonNumber:1,mediaFormat:3}]})
+    assert.equal(response.status,201)
+    const saved=await response.json()
+    assert.equal(saved.id,item.id)
+    assert.deepEqual(saved.versions.map(version=>version.ownedSeasons),[[{seasonNumber:1,mediaFormat:2}],[{seasonNumber:1,mediaFormat:3}]])
+    assert.equal((await fetch(`${url}/${item.id}`,{method:'DELETE'})).status,204)
+  })
+  await t.test('merges concurrent format additions and edits a selected version atomically', async () => {
+    const count=database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count
+    const bodies=[{name:'Concurrent formats',mediaType:1,mediaFormat:1,info:'DVD notes'},
+      {name:'Concurrent formats',mediaType:1,mediaFormat:2,info:'Blu-ray notes'}]
+    const responses=await Promise.all(bodies.map(body=>post(body)))
+    assert.deepEqual(responses.map(response=>response.status),[201,201])
+    const results=await Promise.all(responses.map(response=>response.json()))
+    assert.equal(results[0].id,results[1].id)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count,count+1)
+    const item=(await (await fetch(url)).json()).find(item=>item.id===results[0].id)
+    assert.equal(item.versions.length,2)
+    const extra=item.versions.find(version=>version.id>0)
+    const original=item.versions.find(version=>version.id===0)
+    const update=body=>fetch(`${url}/${item.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:item.name,mediaType:1,mediaFormat:3,versionId:extra.id,info:'UHD notes',...body})})
+    const edited=await update({})
+    assert.equal(edited.status,200)
+    const saved=await edited.json()
+    assert.deepEqual({...saved.versions.find(version=>version.id===0),updatedAt:original.updatedAt},original)
+    assert.equal(saved.versions.find(version=>version.id===extra.id).info,'UHD notes')
+    assert.equal(saved.versions.find(version=>version.id===extra.id).mediaFormat,3)
+    const duplicate=await update({mediaFormat:original.mediaFormat,name:'Must roll back'})
+    assert.equal(duplicate.status,409)
+    assert.equal(database.prepare('SELECT Name FROM Collection WHERE Id=?').get(item.id).Name,item.name)
+    const after=(await (await fetch(url)).json()).find(entry=>entry.id===item.id)
+    assert.equal(after.versions.find(version=>version.id===extra.id).mediaFormat,3)
+    assert.equal((await update({versionId:999999})).status,404)
+    assert.equal((await post({name:item.name,mediaType:1,mediaFormat:3})).status,409)
+    // A failing ownership insert rolls back both the provisional row and the merge.
+    database.exec("CREATE TRIGGER RejectVersion BEFORE INSERT ON CollectionVersions BEGIN SELECT RAISE(ABORT,'test failure'); END;")
+    const failed=await post({name:item.name,mediaType:1,mediaFormat:99})
+    assert.equal(failed.status,503)
+    database.exec('DROP TRIGGER RejectVersion')
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM Collection').get().count,count+1)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionVersions WHERE CollectionItemId=?').get(item.id).count,1)
+    assert.equal((await fetch(`${url}/${item.id}`,{method:'DELETE'})).status,204)
+  })
+
+  await t.test('consolidates existing platform versions without losing notes or exact historical duplicates', async () => {
+    const insert=database.prepare('INSERT INTO Collection (Name,MediaType,Platform,Info) VALUES (?,3,?,?)')
+    const first=Number(insert.run('Existing Destiny 2',4,'Xbox notes').lastInsertRowid)
+    const second=Number(insert.run('existing destiny 2',9,'PlayStation notes').lastInsertRowid)
+    const historical=Number(insert.run('Historical exact duplicate',4,'First owned copy').lastInsertRowid)
+    const historical2=Number(insert.run('Historical exact duplicate',4,'Second owned copy').lastInsertRowid)
+    const consolidate=async()=>{
+      const child=spawn('dotnet',[process.env.COLLECTION_API_TEST_DLL ?? join(project,'bin/Debug/net10.0/MyMediaCollection.API.dll'),'--consolidate-collection-versions'],{
+        cwd:project,windowsHide:true,env:{...process.env,ConnectionStrings__Collection:`Data Source=${databasePath};Pooling=False`,Logging__EventLog__LogLevel__Default:'None'},stdio:['ignore','pipe','pipe'],
+      })
+      let output='';child.stdout.on('data',data=>output+=data);child.stderr.on('data',data=>output+=data)
+      assert.equal((await once(child,'exit'))[0],0,output)
+    }
+    await consolidate()
+    const listed=await (await fetch(url)).json()
+    const combined=listed.find(item=>item.id===first)
+    assert.deepEqual(combined.versions.map(version=>version.platform),[4,9])
+    assert.deepEqual(combined.versions.map(version=>version.info),['Xbox notes','PlayStation notes'])
+    assert.equal(listed.some(item=>item.id===second),false)
+    assert.ok(listed.some(item=>item.id===historical))
+    assert.ok(listed.some(item=>item.id===historical2))
+    await consolidate()
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionVersions WHERE CollectionItemId=?').get(first).count,1)
+    for(const id of [first,historical,historical2]) assert.equal((await fetch(`${url}/${id}`,{method:'DELETE'})).status,204)
+  })
+
+  await t.test('deletes individual game platforms, promotes the original and protects the last version and stale requests', async () => {
+    let item
+    for(const fields of [{platform:4,isPhysical:true,info:'Xbox notes'},
+      {platform:9,isPhysical:false,store:10,info:'PS notes'},
+      {platform:26,isPhysical:false,store:1,info:'PC notes'}]) {
+      const response=await post({name:'Delete platform test',mediaType:3,...fields})
+      assert.equal(response.status,201)
+      item=await response.json()
+    }
+    const originalId=item.id
+    const remove=(version,override={})=>fetch(`${url}/${item.id}/versions/${version.id}`,{method:'DELETE',headers:{'If-Match':`"${version.deletionToken}"`},...override})
+    const original=item.versions.find(version=>version.id===0)
+    const pc=item.versions.find(version=>version.platform===26)
+    assert.equal((await remove(pc,{headers:{}})).status,400)
+    assert.equal((await remove(pc,{headers:{'If-Match':'"stale-token"'}})).status,412)
+    const another=await (await post({name:'Another game for version scope',mediaType:3,platform:1,isPhysical:true})).json()
+    const foreign=await fetch(`${url}/${another.id}/versions/${pc.id}`,{method:'DELETE',headers:{'If-Match':`"${pc.deletionToken}"`}})
+    assert.equal(foreign.status,404)
+    const removedPc=await remove(pc)
+    assert.equal(removedPc.status,200)
+    item=await removedPc.json()
+    assert.deepEqual(item.versions.map(version=>version.platform),[4,9])
+    const removedOriginal=await remove(original)
+    assert.equal(removedOriginal.status,200)
+    item=await removedOriginal.json()
+    assert.equal(item.id,originalId)
+    assert.equal(item.name,'Delete platform test')
+    assert.equal(item.platform,9)
+    assert.equal(item.store,10)
+    assert.equal(item.isPhysical,false)
+    assert.equal(item.info,'PS notes')
+    assert.equal(item.versions.length,1)
+    assert.equal(item.versions[0].id,0)
+    assert.equal((await remove(original)).status,412)
+    const last=await remove(item.versions[0])
+    assert.equal(last.status,409)
+    assert.equal((await last.json()).code,'collection_last_version')
+    assert.ok(database.prepare('SELECT Id FROM Collection WHERE Id=?').get(originalId))
+    const readded=await post({name:item.name,mediaType:3,platform:4,isPhysical:true})
+    assert.equal(readded.status,201)
+    assert.equal((await readded.json()).id,originalId)
+    for(const id of [originalId,another.id]) assert.equal((await fetch(`${url}/${id}`,{method:'DELETE'})).status,204)
+  })
+
+  await t.test('promotes remaining TV ownership and preserves metadata atomically when a format is deleted', async () => {
+    const importSeries=fields=>fetch(url.replace('/collection','/tmdb/import'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tmdbId:703,language:'fi-FI',item:{name:'TV version deletion',mediaType:2,...fields}})})
+    const first=await importSeries({mediaFormat:2,ownedSeasons:[{seasonNumber:1,mediaFormat:2}],info:'Blu-ray notes'})
+    assert.equal(first.status,201)
+    const original=await first.json()
+    const second=await importSeries({mediaFormat:3,isCompleteBox:true,info:'UHD complete box'})
+    assert.equal(second.status,201)
+    const before=await second.json()
+    const remove=()=>fetch(`${url}/${before.id}/versions/0`,{method:'DELETE',headers:{'If-Match':`"${before.versions[0].deletionToken}"`}})
+    database.exec("CREATE TRIGGER RejectPromotion BEFORE INSERT ON CollectionSeasons WHEN NEW.SeasonNumber=3 BEGIN SELECT RAISE(ABORT,'test failure'); END;")
+    assert.equal((await remove()).status,503)
+    database.exec('DROP TRIGGER RejectPromotion')
+    const afterFailure=(await (await fetch(url)).json()).find(item=>item.id===before.id)
+    const {versionAdded,...persistedBefore}=before
+    assert.equal(versionAdded,true)
+    assert.deepEqual(afterFailure,persistedBefore)
+    const response=await remove()
+    assert.equal(response.status,200)
+    const saved=await response.json()
+    assert.equal(saved.id,original.id)
+    assert.equal(saved.createdAt,original.createdAt)
+    assert.equal(saved.tmdbMetadataId,original.tmdbMetadataId)
+    assert.equal(saved.posterPath,original.posterPath)
+    assert.equal(saved.name,original.name)
+    assert.equal(saved.mediaFormat,3)
+    assert.equal(saved.isCompleteBox,true)
+    assert.equal(saved.info,'UHD complete box')
+    assert.deepEqual(saved.ownedSeasons,[1,2,3].map(seasonNumber=>({seasonNumber,mediaFormat:3})))
+    assert.equal(saved.versions.length,1)
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM CollectionVersions WHERE CollectionItemId=?').get(saved.id).count,0)
+    assert.equal((await fetch(`${url}/${saved.id}`,{method:'DELETE'})).status,204)
+  })
+
+  await t.test('stores version history with server timestamps and reserved user IDs, newest additions first', async () => {
+    const historyUrl=url.replace('/collection','/version-history')
+    assert.deepEqual(await (await fetch(historyUrl)).json(),[])
+    const entries=[]
+    for(const [versionNumber,description] of [['  1.0.0  ',' First release\nSecond line '],['0.9.0','Historical release added later']]) {
+      const response=await fetch(historyUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({versionNumber,description,userId:'untrusted-user',createdAt:'2000-01-01T00:00:00Z'})})
+      assert.equal(response.status,201)
+      const entry=await response.json()
+      assert.equal(entry.versionNumber,versionNumber.trim())
+      assert.equal(entry.description,description.trim())
+      assert.equal(entry.userId,null)
+      assert.ok(Date.parse(entry.createdAt)>Date.parse('2026-01-01'))
+      const stored=database.prepare('SELECT * FROM VersionHistory WHERE Id=?').get(entry.id)
+      assert.equal(stored.UserId,null)
+      assert.equal(stored.VersionNumber,entry.versionNumber)
+      entries.push(entry)
+    }
+    assert.deepEqual(await (await fetch(historyUrl)).json(),entries.reverse())
+  })
+
+  await t.test('rejects empty, oversized and duplicate version history without partial writes', async () => {
+    const historyUrl=url.replace('/collection','/version-history')
+    const count=database.prepare('SELECT COUNT(*) AS count FROM VersionHistory').get().count
+    for(const body of [{},{versionNumber:' ',description:'Valid'},{versionNumber:'2.0',description:'  '},
+      {versionNumber:'x'.repeat(65),description:'Valid'},{versionNumber:'2.0',description:'x'.repeat(20001)}]) {
+      const response=await fetch(historyUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      assert.equal(response.status,400)
+    }
+    const duplicate=await fetch(historyUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({versionNumber:' 1.0.0 ',description:'Must not replace the old entry'})})
+    assert.equal(duplicate.status,409)
+    assert.equal((await duplicate.json()).code,'version_exists')
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM VersionHistory').get().count,count)
+    assert.equal(database.prepare("SELECT Description FROM VersionHistory WHERE VersionNumber='1.0.0'").get().Description,'First release\nSecond line')
+    database.exec('ALTER TABLE VersionHistory RENAME TO UnavailableVersionHistory')
+    assert.equal((await fetch(historyUrl)).status,503)
+    assert.equal((await fetch(historyUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({versionNumber:'2',description:'Valid'})})).status,503)
+    database.exec('ALTER TABLE UnavailableVersionHistory RENAME TO VersionHistory')
+  })
+
   await t.test('forwards client /api requests through the Vite proxy', async () => {
     const { createServer: createViteServer } = await import('../../Client/node_modules/vite/dist/node/index.js')
     const client = fileURLToPath(new URL('../../Client/', import.meta.url))

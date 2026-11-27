@@ -22,6 +22,7 @@ public sealed class IgdbController(IgdbClient igdb, CollectionRepository reposit
     }
 
     [HttpPost("import")]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CollectionItem>> Import(IgdbImportRequest request, CancellationToken cancellationToken)
     {
         try
@@ -29,6 +30,7 @@ public sealed class IgdbController(IgdbClient igdb, CollectionRepository reposit
             var metadata = await igdb.DetailsAsync(request.IgdbId, cancellationToken);
             return StatusCode(201, await repository.CreateAsync(request.Item, cancellationToken, igdbMetadata: metadata));
         }
+        catch (DuplicateCollectionItemException exception) { return Conflict(new { code = "collection_duplicate", existingItemId = exception.ExistingItemId, name = exception.ExistingName }); }
         catch (IgdbException exception) { return IgdbProblem(exception); }
         catch (SqliteException exception)
         {

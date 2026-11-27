@@ -92,7 +92,7 @@
   padding: 0.25rem;
   border: 0;
   background: transparent;
-  transition: background-color 200ms ease-in-out;
+  transition: background-color var(--interaction-color-duration, 200ms) ease-in-out;
 }
 
 .media-collection-entry .collection-drag-handle:hover:not(:disabled) {

@@ -1,0 +1,230 @@
+@property --theme-tag-green {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #166534;
+}
+
+@property --theme-tag-blue {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1e40af;
+}
+
+@property --theme-tag-red {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #991b1b;
+}
+
+@property --theme-tag-gray {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #374151;
+}
+
+@property --theme-tag-purple {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #6b21a8;
+}
+
+@property --theme-tag-slate {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #475569;
+}
+
+@property --theme-tag-cyan {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #155e75;
+}
+
+@property --theme-tag-pink {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #9d174d;
+}
+
+@property --theme-tag-amber {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #92400e;
+}
+
+@property --theme-tag-other {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #7e22ce;
+}
+
+@property --theme-positive-background {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #15803d;
+}
+
+@property --theme-positive-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #166534;
+}
+
+@property --theme-positive-text {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --theme-edit-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1d4ed8;
+}
+
+@property --theme-edit-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #dbeafe;
+}
+
+@property --theme-delete-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b91c1c;
+}
+
+@property --theme-delete-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fee2e2;
+}
+
+@property --theme-info-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2563eb;
+}
+
+@property --theme-info-tint {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #3b82f6;
+}
+
+@property --theme-cancel-highlight {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1d4ed8;
+}
+
+@property --theme-cancel-background {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #dbeafe;
+}
+
+@property --theme-danger {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b91c1c;
+}
+
+@property --theme-danger-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #991b1b;
+}
+
+@property --theme-danger-text {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+:root {
+  --theme-tag-green: #166534;
+  --theme-tag-blue: #1e40af;
+  --theme-tag-red: #991b1b;
+  --theme-tag-gray: #374151;
+  --theme-tag-purple: #6b21a8;
+  --theme-tag-slate: #475569;
+  --theme-tag-cyan: #155e75;
+  --theme-tag-pink: #9d174d;
+  --theme-tag-amber: #92400e;
+  --theme-tag-other: #7e22ce;
+  --theme-positive-background: #15803d;
+  --theme-positive-hover: #166534;
+  --theme-positive-text: #ffffff;
+  --theme-edit-color: #1d4ed8;
+  --theme-edit-hover: #dbeafe;
+  --theme-delete-color: #b91c1c;
+  --theme-delete-hover: #fee2e2;
+  --theme-info-color: #2563eb;
+  --theme-info-tint: #3b82f6;
+  --theme-cancel-highlight: #1d4ed8;
+  --theme-cancel-background: #dbeafe;
+  --theme-danger: #b91c1c;
+  --theme-danger-hover: #991b1b;
+  --theme-danger-text: #ffffff;
+  --theme-palette-transitions:
+    --theme-tag-green var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-blue var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-red var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-gray var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-purple var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-slate var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-cyan var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-pink var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-amber var(--theme-color-duration) var(--theme-color-easing),
+    --theme-tag-other var(--theme-color-duration) var(--theme-color-easing),
+    --theme-positive-background var(--theme-color-duration) var(--theme-color-easing),
+    --theme-positive-hover var(--theme-color-duration) var(--theme-color-easing),
+    --theme-positive-text var(--theme-color-duration) var(--theme-color-easing),
+    --theme-edit-color var(--theme-color-duration) var(--theme-color-easing),
+    --theme-edit-hover var(--theme-color-duration) var(--theme-color-easing),
+    --theme-delete-color var(--theme-color-duration) var(--theme-color-easing),
+    --theme-delete-hover var(--theme-color-duration) var(--theme-color-easing),
+    --theme-info-color var(--theme-color-duration) var(--theme-color-easing),
+    --theme-info-tint var(--theme-color-duration) var(--theme-color-easing),
+    --theme-cancel-highlight var(--theme-color-duration) var(--theme-color-easing),
+    --theme-cancel-background var(--theme-color-duration) var(--theme-color-easing),
+    --theme-danger var(--theme-color-duration) var(--theme-color-easing),
+    --theme-danger-hover var(--theme-color-duration) var(--theme-color-easing),
+    --theme-danger-text var(--theme-color-duration) var(--theme-color-easing);
+}
+
+:root:is([data-theme='dark'], [data-theme='black']) {
+  --theme-tag-green: #86efac;
+  --theme-tag-blue: #93c5fd;
+  --theme-tag-red: #fca5a5;
+  --theme-tag-gray: #cbd5e1;
+  --theme-tag-purple: #d8b4fe;
+  --theme-tag-slate: #cbd5e1;
+  --theme-tag-cyan: #67e8f9;
+  --theme-tag-pink: #f9a8d4;
+  --theme-tag-amber: #fbbf24;
+  --theme-tag-other: #d8b4fe;
+  --theme-positive-background: #86efac;
+  --theme-positive-hover: #bbf7d0;
+  --theme-positive-text: #052e16;
+  --theme-edit-color: #60a5fa;
+  --theme-edit-hover: #172f4d;
+  --theme-delete-color: #fb7185;
+  --theme-delete-hover: #431c23;
+  --theme-info-color: #93c5fd;
+  --theme-info-tint: #60a5fa;
+  --theme-cancel-highlight: #93c5fd;
+  --theme-cancel-background: #172f4d;
+  --theme-danger: #f87171;
+  --theme-danger-hover: #fca5a5;
+  --theme-danger-text: #450a0a;
+}
+
+:root[data-theme='black'] {
+  --theme-positive-background: #76ff03;
+  --theme-positive-hover: #b2ff59;
+  --theme-positive-text: #050a05;
+  --theme-cancel-highlight: #60a5fa;
+  --theme-cancel-background: #122439;
+}

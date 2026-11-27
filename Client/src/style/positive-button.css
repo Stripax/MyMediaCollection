@@ -1,28 +1,16 @@
 .positive-button,
 .item-dialog-primary {
-  --positive-background: #15803d;
-  --positive-hover: #166534;
-  --positive-text: #ffffff;
+  --positive-background: var(--theme-positive-background);
+  --positive-hover: var(--theme-positive-hover);
+  --positive-text: var(--theme-positive-text);
   border-color: var(--positive-background);
   background: var(--positive-background);
   color: var(--positive-text);
   font-weight: 600;
   transition:
-    background-color 200ms ease,
-    border-color 200ms ease,
-    color 200ms ease;
-}
-
-:root[data-theme='dark'] :is(.positive-button, .item-dialog-primary) {
-  --positive-background: #86efac;
-  --positive-hover: #bbf7d0;
-  --positive-text: #052e16;
-}
-
-:root[data-theme='black'] :is(.positive-button, .item-dialog-primary) {
-  --positive-background: #76ff03;
-  --positive-hover: #b2ff59;
-  --positive-text: #050a05;
+    background-color var(--interaction-color-duration, 200ms) ease,
+    border-color var(--interaction-color-duration, 200ms) ease,
+    color var(--interaction-color-duration, 200ms) ease;
 }
 
 :is(.positive-button, .item-dialog-primary):hover:not(:disabled) {

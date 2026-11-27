@@ -4,6 +4,8 @@ namespace MyMediaCollection.API.Models;
 
 public sealed class CreateCollectionItemRequest : IValidatableObject
 {
+    [Range(0, long.MaxValue)]
+    public long? VersionId { get; init; }
     [Required, StringLength(300)]
     public string Name { get; init; } = string.Empty;
     public bool? NameWasEdited { get; init; }

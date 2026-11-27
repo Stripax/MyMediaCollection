@@ -250,7 +250,7 @@ describe('TV season ownership', () => {
     await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
   })
 
-  it('displays mixed TV formats and the complete box marker in the table', () => {
+  it('displays complete series and individual seasons from different formats together', async () => {
     wrapper = mount(CollectionTable, {
       props: {
         category: 'tvSeries',
@@ -280,5 +280,38 @@ describe('TV season ownership', () => {
       'Blu-ray',
     ])
     expect(wrapper.find('th.collection-format').exists()).toBe(false)
+    expect(wrapper.find('.media-individual-seasons-badge').exists()).toBe(false)
+    await wrapper.setProps({
+      items: [
+        {
+          id: 1,
+          name: 'Series',
+          mediaType: 2,
+          mediaFormat: 2,
+          isCompleteBox: true,
+          info: null,
+          versions: [
+            { id: 0, mediaFormat: 2, isCompleteBox: true, info: null },
+            {
+              id: 20,
+              mediaFormat: 1,
+              isCompleteBox: false,
+              ownedSeasons: [{ seasonNumber: 1, mediaFormat: 1 }],
+              info: null,
+            },
+          ],
+        },
+      ],
+    })
+    expect(wrapper.findAll('.media-format-badge').map((tag) => tag.text())).toEqual([
+      fi.tvOwnership.completeBoxShort,
+      fi.tvOwnership.individualSeasons,
+      'Blu-ray',
+      'DVD',
+    ])
+    await wrapper.setProps({
+      items: [{ id: 1, name: 'Series', mediaType: 2, mediaFormat: 1, info: null }],
+    })
+    expect(wrapper.find('.media-individual-seasons-badge').exists()).toBe(false)
   })
 })

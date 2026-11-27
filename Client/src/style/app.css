@@ -31,6 +31,8 @@
 }
 
 :root {
+  --theme-color-duration: 300ms;
+  --theme-color-easing: ease-in-out;
   scrollbar-gutter: stable;
   font-family:
     system-ui,
@@ -39,11 +41,16 @@
     'Segoe UI',
     sans-serif;
   transition:
-    --page-background 300ms ease-in-out,
-    --surface 300ms ease-in-out,
-    --text 300ms ease-in-out,
-    --border 300ms ease-in-out,
-    --accent 300ms ease-in-out;
+    --page-background var(--theme-color-duration) var(--theme-color-easing),
+    --surface var(--theme-color-duration) var(--theme-color-easing),
+    --text var(--theme-color-duration) var(--theme-color-easing),
+    --border var(--theme-color-duration) var(--theme-color-easing),
+    --accent var(--theme-color-duration) var(--theme-color-easing),
+    var(--theme-palette-transitions);
+}
+
+:root[data-theme-changing] {
+  --interaction-color-duration: 0ms;
 }
 
 :root,

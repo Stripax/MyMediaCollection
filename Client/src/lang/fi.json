@@ -17,6 +17,12 @@
     "digitalCopy": "Digitaalinen",
     "unknownCopy": "Ei tiedossa",
     "category": "Kategoria",
+    "showCategory": {
+      "movies": "Näytä elokuvat",
+      "tvSeries": "Näytä TV-sarjat",
+      "videoGames": "Näytä videopelit",
+      "boardGames": "Näytä lauta- ja korttipelit"
+    },
     "editTitles": {
       "all": "Muokkaa kohdetta",
       "movies": "Muokkaa elokuvaa",
@@ -38,8 +44,25 @@
     "searchPlaceholder": "Kirjoita kohteen nimi…",
     "clearSearch": "Tyhjennä haku",
     "searchResults": "Hakutuloksia: {count}",
-    "noMatches": "Hakua vastaavia kohteita ei löytynyt valitusta kategoriasta.",
+    "noMatches": "Valittuja hakuehtoja vastaavia kohteita ei löytynyt.",
     "actions": "Toiminnot",
+    "sortNameAscending": "Nimi: lajittele A–Ö",
+    "sortNameDescending": "Nimi: lajittele Ö–A",
+    "sortNameDefault": "Nimi: palauta oletusjärjestys",
+    "sortCategoryAscending": "Kategoria: lajittele A–Ö",
+    "sortCategoryDescending": "Kategoria: lajittele Ö–A",
+    "sortCategoryDefault": "Kategoria: palauta oletusjärjestys",
+    "filters": {
+      "title": "Suodattimet",
+      "show": "Näytä suodattimet",
+      "hide": "Piilota suodattimet",
+      "all": "Kaikki",
+      "clear": "Tyhjennä suodattimet",
+      "itemType": "Kohteen tyyppi",
+      "single": "Yksittäinen kohde",
+      "noStore": "Ei digitaalista kauppaa",
+      "categoryHint": "Valitse kategoria nähdäksesi tarkemmat suodattimet."
+    },
     "showInfo": "Näytä kohteen {name} lisätiedot",
     "noInfo": "Ei lisätietoja.",
     "noInfoTooltip": "Ei lisätietoja",
@@ -121,13 +144,16 @@
     "nameRequired": "Anna kohteelle nimi.",
     "validationError": "Tarkista nimi, kategoria, formaatti tai alusta sekä PC-pelin kauppa. Lisätietojen enimmäispituus on 10 000 merkkiä.",
     "saveError": "Tallennus epäonnistui. Tarkista yhteys ja yritä uudelleen.",
+    "duplicate": "{name} löytyy jo kokoelmasta samalla alustalla tai samassa formaatissa. Kaksoiskappaletta ei tallennettu.",
     "category": "Kokoelman kategoria",
     "name": "Nimi",
     "mediaFormat": "Formaatti",
     "info": "Lisätiedot",
     "close": "Peruuta",
     "isPhysical": "Fyysinen kopio",
-    "chooseStoreOptional": "Valitse digitaalinen kauppa (valinnainen)"
+    "chooseStoreOptional": "Valitse digitaalinen kauppa (valinnainen)",
+    "version": "Muokattava versio",
+    "versionAdded": "Uusi alusta tai formaatti lisättiin kohteeseen {name}."
   },
   "sidebar": {
     "categories": "Kategoriat",
@@ -238,7 +264,8 @@
   "tvOwnership": {
     "title": "Omistetut kaudet",
     "completeBox": "Koko sarja",
-    "completeBoxShort": "Kokonainen boksi",
+    "completeBoxShort": "Koko sarja",
+    "individualSeasons": "Yksittäisiä kausia",
     "help": "Valitse omistamasi kaudet ja kunkin kauden formaatti. Oletusformaattia käytetään uusille kausivalinnoille. Koko sarja valitsee kaikki tunnetut varsinaiset kaudet.",
     "manualCount": "Kausien määrä (valintaa varten)",
     "season": "Kausi {number}",
@@ -308,5 +335,31 @@
     "contentsRequired": "Lisää kokoelmaan vähintään yksi nimetty kohde.",
     "searchHint": "Hae ja valitse kokoelmaan kuuluvat elokuvat tai sarjat yksi kerrallaan. Kirjoita kokoelman oma nimi alla olevaan Nimi-kenttään.",
     "tooMany": "Kokoelmassa voi olla enintään 100 kohdetta."
+  },
+  "versionDelete": {
+    "platform": "Poista valittu alusta",
+    "format": "Poista valittu formaatti",
+    "platformTitle": "Poista alusta",
+    "formatTitle": "Poista formaatti",
+    "confirm": "Haluatko varmasti poistaa version {version} kohteelta {name}? Kohde ja sen muut versiot säilyvät kokoelmassa.",
+    "success": "Versio {version} poistettiin kohteelta {name}.",
+    "lastVersion": "Viimeistä versiota ei voi poistaa erikseen. Voit poistaa koko kohteen taulukon poistopainikkeella.",
+    "changed": "Valittu versio on muuttunut tai poistettu. Avaa kohteen muokkausikkuna uudelleen ja yritä uudestaan.",
+    "error": "Version poistaminen epäonnistui. Yritä uudelleen."
+  },
+  "versionHistory": {
+    "title": "Versiohistoria",
+    "introduction": "Lisää uusi versionumero ja kuvaile version muutokset. Aiemmat versiot näkyvät alla uusimmasta vanhimpaan.",
+    "number": "Versionumero",
+    "changes": "Muutokset",
+    "history": "Aiemmat versiot",
+    "empty": "Versiohistoriaa ei ole vielä lisätty.",
+    "loading": "Ladataan versiohistoriaa…",
+    "loadError": "Versiohistorian lataaminen epäonnistui. Yritä uudelleen.",
+    "save": "Tallenna",
+    "saved": "Versio {version} tallennettiin versiohistoriaan.",
+    "duplicate": "Tämä versionumero on jo versiohistoriassa.",
+    "validationError": "Tarkista versionumero ja muutoskuvaus.",
+    "saveError": "Version tallentaminen epäonnistui. Yritä uudelleen."
   }
 }

@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { Dialog } from '@ark-ui/vue/dialog'
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { CollectionItem } from '../models/collection'
+import { itemVersions, type CollectionItem } from '../models/collection'
 import { displayItemName } from '../models/itemNames'
 import ToolbarTooltip from './ToolbarTooltip.vue'
 import '../style/info-button.css'
 import '../style/collection-item-dialog.css'
 import '../style/collection-info-dialog.css'
 
-defineProps<{ item: CollectionItem }>()
+const props = defineProps<{ item: CollectionItem }>()
+const info = computed(() =>
+  [
+    ...new Set(
+      itemVersions(props.item)
+        .map((version) => version.info?.trim())
+        .filter(Boolean),
+    ),
+  ].join('\n\n'),
+)
 const { t, locale } = useI18n({ useScope: 'global' })
 const open = ref(false)
 const transitioning = ref(false)
@@ -24,13 +33,13 @@ function finishClose() {
   <Dialog.Root v-model:open="open" lazy-mount>
     <ToolbarTooltip
       v-slot="{ describedby }"
-      :text="t(item.info?.trim() ? 'itemForm.info' : 'collection.noInfoTooltip')"
+      :text="t(info ? 'itemForm.info' : 'collection.noInfoTooltip')"
       class="collection-action-tooltip collection-info-tooltip"
     >
       <Dialog.Trigger
         ref="trigger"
         class="info-btn-glass collection-info-button"
-        :disabled="transitioning || !item.info?.trim()"
+        :disabled="transitioning || !info"
         :aria-label="t('collection.showInfo', { name: displayItemName(item, locale) })"
         :aria-describedby="describedby"
         ><span aria-hidden="true">i</span></Dialog.Trigger
@@ -54,7 +63,7 @@ function finishClose() {
                 t('itemForm.info')
               }}</Dialog.Title>
               <Dialog.Description class="collection-info-text">{{
-                item.info?.trim() ? item.info : t('collection.noInfo')
+                info ? info : t('collection.noInfo')
               }}</Dialog.Description>
               <div class="item-dialog-actions">
                 <Dialog.CloseTrigger type="button" class="item-dialog-cancel">{{

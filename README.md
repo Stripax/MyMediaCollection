@@ -143,6 +143,70 @@ node --test Backend/tests/collection-api.test.mjs
 Tests start the API against a temporary SQLite database. They do not write to the
 application's database.
 
+## Duplicate items and owned versions
+
+Movies, TV series and video games have one collection item with multiple owned
+versions. Adding another format or platform returns the existing item ID and
+`versionAdded: true`; it does not persist another Collection row. The table
+shows all format/platform badges. Filters match a single owned version, so an
+Xbox physical copy cannot satisfy a PlayStation digital-copy filter. The editor
+has a **Version to edit** selector; its format/platform, store, copy type, TV
+season ownership and notes are saved independently. Names, source metadata,
+box contents and the cover belong to the shared collection item. Deleting the
+item deletes all of its versions. Notes from all versions are available through
+the table's information button.
+
+Manual creation and TMDB/IGDB imports return HTTP 409 when the same game platform
+or movie/TV format is already owned. Copy type, store, notes and dates do not
+permit adding that platform/format again. TV formats use the actual season
+formats when individually owned seasons are specified. The response contains
+`code: "collection_duplicate"`, `existingItemId` and `name`. The client displays
+a translated error and retains the form values. Editing a version into a
+platform/format already used by another version is also rejected. BGG/tabletop
+items retain their previous duplicate check and are not combined into versions.
+
+Imported items match by provider ID, independently of title language or custom
+names. If either item is manual, normalized names, provider titles and translated
+titles are compared. Different known provider IDs remain distinct, including
+remakes with equal titles. Boxes are separate from individual titles; their
+member sets must match irrespective of order and cover selection.
+
+Checks, metadata writes and version merging use the same immediate SQLite
+transaction. Concurrent additions cannot create separate entries for the same
+item. Failed saves roll back the entire operation.
+
+Apply `Backend/MyMediaCollection.API/Data/Migrations/014-add-collection-versions.sql`
+once after migration 013 before starting the updated API. It adds
+`CollectionVersions` for additional versions; the original version remains on
+`Collection` for compatibility (version ID 0 in API responses). Additional version
+IDs are scoped to their collection item and are supplied as `VersionId` on PUT.
+
+The editor can remove a selected format/platform after a confirmation.
+`DELETE /api/collection/{id}/versions/{versionId}` returns the updated item.
+Send its version's `deletionToken` as a quoted `If-Match` header; stale snapshots
+return HTTP 412 (`collection_version_changed`), missing versions return 404,
+and deleting the final version returns 409 (`collection_last_version`). Removing
+version 0 promotes one remaining version into the original slot, preserving its
+store, copy type, season ownership and notes. Shared names, metadata, cover, box
+contents, item ID and creation date remain. Promotion and deletion are atomic.
+The editor closes and the table refreshes on success. The last version can only
+be removed using the whole-item delete action. No additional migration is needed.
+
+After backing up an existing database, previously separate versions can be
+consolidated with this explicit one-off command from the API project directory:
+
+```powershell
+dotnet run -- --consolidate-collection-versions
+```
+
+This does not start the server or contact external services. It keeps the oldest
+collection item, moves other formats/platforms and their notes, ownership and
+timestamps into versions, and preserves provider metadata. It is safe to rerun.
+Historical exact duplicates are retained to avoid silently discarding owned
+copies. No consolidation or schema migration runs automatically on startup.
+Migration 014 and consolidation have been applied to the local workspace database
+after creating a backup.
+
 ## TMDB search and import
 
 Manual addition remains available for every category. The separate **Add with
@@ -563,7 +627,12 @@ Apply `013-add-media-collections.sql` after migration 012. It adds
 `Collection.IsCollection` and the ordered `CollectionContents` table, preserving
 existing items as ordinary titles. Back up the database before applying it.
 
-The **Collection** checkbox before Name enables a movie or TV box. A box is one
+The **Collection** checkbox before Name enables a movie box. New TV series use
+**Entire series / Complete box** under season ownership instead; both manual
+and TMDB TV addition omit collection mode. The TV item-type filter uses
+**Complete box** (`isCompleteBox`) instead of Collection, and combines this
+with format filtering within the same owned version. Previously stored TV
+collections remain readable and editable. A box is one
 collection row with its own name and one shared disc format. Manual creation
 accepts `isCollection: true` and `collectionContents: [{ "name": "First movie" }]`.
 The editor supports changing member names and adding or removing members.
@@ -604,3 +673,31 @@ Omitting collection fields preserves an
 existing box for older API callers. Turning collection mode off clears the
 member list, and deleting a box cascades to its contents while keeping shared
 TMDB metadata.
+
+## Application version history
+
+The top bar shows a divider after the collection title and a link displaying the
+most recently saved version number. Until the first entry is added, it reads
+**Version history**. The dialog contains a version-number field, a changes text
+area, and existing history below the fields. Entries are listed newest first
+with horizontal separators. Descriptions are rendered as plain text with line
+breaks preserved. Save is enabled only when both fields have non-whitespace
+content; Cancel does not write anything. Successful saves update the top-bar
+number immediately, and history is loaded again on the next visit.
+
+Apply `Backend/MyMediaCollection.API/Data/Migrations/015-add-version-history.sql`
+once after migration 014 before running the updated backend. The local database
+has been backed up and this migration applied; no application version has been
+invented or seeded. The new `VersionHistory` table contains `Id`, `VersionNumber`,
+`Description`, server-generated UTC `CreatedAt`, and nullable `UserId`. UserId is
+reserved for future authentication and remains NULL; client-supplied author IDs
+or timestamps are ignored. Existing collection data is not changed.
+
+- `GET /api/version-history`: all entries ordered by ID descending (insertion
+  order, not semantic version sorting).
+- `POST /api/version-history`: `{ "versionNumber": "1.0.0", "description": "Changes" }`.
+  Returns the saved entry with HTTP 201. Both fields are trimmed and required,
+  with limits of 64 and 20,000 characters. Reusing a version number returns HTTP
+  409 with `code: "version_exists"`. Validation failures return 400 and database
+  failures return a generic 503. Version text is not forced into a particular
+  semantic-version format. No history editing or deletion is exposed.

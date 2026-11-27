@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectControl from './SelectControl.vue'
 import { Dialog } from '@ark-ui/vue/dialog'
 import '../style/collection-item-dialog.css'
 import '../style/media-collection.css'
@@ -22,6 +23,7 @@ import type { OwnedSeason } from '../models/collection'
 import { igdbCoverUrl, igdbPlatformOptions, type IgdbResult } from '../models/igdb'
 import { bggImageUrl, type BggResult } from '../models/bgg'
 import BggAttribution from './BggAttribution.vue'
+import { displayItemName } from '../models/itemNames'
 import { itemNoticeKey } from '../models/itemNotices'
 import BggExpansionDetails from './BggExpansionDetails.vue'
 import CollectionDragHandle from './CollectionDragHandle.vue'
@@ -119,6 +121,7 @@ const saving = ref(false)
 const transitioning = ref(false)
 const pendingSave = ref(false)
 let savedName = ''
+let versionAdded = false
 let savedMediaType = 1
 let savedId: number | undefined
 const page = ref(1)
@@ -151,6 +154,7 @@ const suggestedName = ref('')
 const format = ref(1)
 const info = ref('')
 const error = ref('')
+const errorParams = ref<Record<string, string>>({})
 let request: AbortController | undefined
 let searchVersion = 0
 
@@ -188,6 +192,7 @@ function prepare() {
 
 watch([mediaType, language, query], clearSearch)
 watch(mediaType, () => {
+  if (mediaType.value !== 1) isCollection.value = false
   inspectedTmdbId.value = null
   loadedMembers.clear()
   collectionSelections.value = []
@@ -210,13 +215,20 @@ watch(open, (value) => {
 })
 onBeforeUnmount(() => request?.abort())
 
-function reportError(key: string) {
+function reportError(key: string, params: Record<string, string> = {}) {
   error.value = key
-  show(key, 'error')
+  errorParams.value = params
+  show(key, 'error', params)
 }
 
 async function responseError(response: Response) {
   const problem = await response.json().catch(() => ({}))
+  if (problem.code === 'collection_duplicate') {
+    reportError('itemForm.duplicate', {
+      name: typeof problem.name === 'string' ? problem.name : name.value.trim(),
+    })
+    return
+  }
   const errors: Record<string, string> = {
     bgg_not_configured: 'bgg.notConfigured',
     bgg_credentials: 'bgg.credentialsError',
@@ -475,7 +487,8 @@ async function save() {
     }
     const saved = await response.json().catch(() => null)
     savedId = Number.isSafeInteger(saved?.id) && saved.id > 0 ? saved.id : undefined
-    savedName = requestedName
+    versionAdded = saved?.versionAdded === true
+    savedName = versionAdded && saved?.name ? displayItemName(saved, locale.value) : requestedName
     savedMediaType = requestedMediaType
     pendingSave.value = true
     open.value = false
@@ -490,7 +503,12 @@ function finishClose() {
   transitioning.value = false
   if (!pendingSave.value) return
   pendingSave.value = false
-  show(itemNoticeKey('saved', savedMediaType), 'success', { name: savedName }, savedId)
+  show(
+    versionAdded ? 'itemForm.versionAdded' : itemNoticeKey('saved', savedMediaType),
+    'success',
+    { name: savedName },
+    savedId,
+  )
   emit('saved')
 }
 </script>
@@ -541,13 +559,18 @@ function finishClose() {
                 <fieldset class="item-form-fields" :disabled="saving || loadingDetails">
                   <label v-if="source === 'tmdb' && category === 'all'" class="item-form-field">
                     <span>{{ t('itemForm.category') }}</span>
-                    <select v-model.number="mediaType" name="TmdbMediaType">
-                      <option :value="1">{{ t('sidebar.movies') }}</option>
-                      <option :value="2">{{ t('sidebar.tvSeries') }}</option>
-                    </select>
+                    <SelectControl>
+                      <select v-model.number="mediaType" name="TmdbMediaType">
+                        <option :value="1">{{ t('sidebar.movies') }}</option>
+                        <option :value="2">{{ t('sidebar.tvSeries') }}</option>
+                      </select>
+                    </SelectControl>
                   </label>
                   <p v-else class="tmdb-category">{{ t(`sidebar.${category}`) }}</p>
-                  <label v-if="source === 'tmdb' && !memberPicker" class="item-form-checkbox">
+                  <label
+                    v-if="source === 'tmdb' && mediaType === 1 && !memberPicker"
+                    class="item-form-checkbox"
+                  >
                     <input v-model="isCollection" name="IsCollection" type="checkbox" />
                     <span>{{ t('mediaCollection.label') }}</span>
                   </label>
@@ -787,21 +810,23 @@ function finishClose() {
                     /></label>
                     <label v-if="!isIgdb" class="item-form-field"
                       ><span>{{ t('itemForm.mediaFormat') }}</span
-                      ><select v-model.number="format" name="MediaFormat">
-                        <option
-                          v-for="option in isBgg ? boardGameFormats : mediaFormats"
-                          :key="option.value"
-                          :value="option.value"
-                        >
-                          {{
-                            isBgg
-                              ? t(option.label)
-                              : option.value === otherOption
-                                ? t('common.other')
-                                : option.label
-                          }}
-                        </option>
-                      </select></label
+                      ><SelectControl>
+                        <select v-model.number="format" name="MediaFormat">
+                          <option
+                            v-for="option in isBgg ? boardGameFormats : mediaFormats"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{
+                              isBgg
+                                ? t(option.label)
+                                : option.value === otherOption
+                                  ? t('common.other')
+                                  : option.label
+                            }}
+                          </option>
+                        </select>
+                      </SelectControl></label
                     >
                     <template v-if="isIgdb">
                       <p v-if="'platforms' in selected && selected.platforms.length">
@@ -809,42 +834,46 @@ function finishClose() {
                       </p>
                       <label class="item-form-field"
                         ><span>{{ t('itemForm.platform') }}</span
-                        ><select v-model.number="platform" name="Platform" required>
-                          <option value="" disabled>{{ t('itemForm.choosePlatform') }}</option>
-                          <option
-                            v-for="option in availablePlatforms"
-                            :key="option.value"
-                            :value="option.value"
-                          >
-                            {{ option.value === otherOption ? t('common.other') : option.label }}
-                          </option>
-                        </select></label
+                        ><SelectControl>
+                          <select v-model.number="platform" name="Platform" required>
+                            <option value="" disabled>{{ t('itemForm.choosePlatform') }}</option>
+                            <option
+                              v-for="option in availablePlatforms"
+                              :key="option.value"
+                              :value="option.value"
+                            >
+                              {{ option.value === otherOption ? t('common.other') : option.label }}
+                            </option>
+                          </select>
+                        </SelectControl></label
                       >
                       <label class="item-form-field"
                         ><span>{{ t('itemForm.store') }}</span
-                        ><select
-                          v-model.number="store"
-                          name="Store"
-                          :disabled="isPhysical || platform === ''"
-                          :required="platform === pcPlatform && !isPhysical"
-                        >
-                          <option value="">
-                            {{
-                              t(
-                                platform === pcPlatform && !isPhysical
-                                  ? 'itemForm.chooseStore'
-                                  : 'itemForm.chooseStoreOptional',
-                              )
-                            }}
-                          </option>
-                          <option
-                            v-for="option in availableStores"
-                            :key="option.value"
-                            :value="option.value"
+                        ><SelectControl>
+                          <select
+                            v-model.number="store"
+                            name="Store"
+                            :disabled="isPhysical || platform === ''"
+                            :required="platform === pcPlatform && !isPhysical"
                           >
-                            {{ option.value === otherOption ? t('common.other') : option.label }}
-                          </option>
-                        </select></label
+                            <option value="">
+                              {{
+                                t(
+                                  platform === pcPlatform && !isPhysical
+                                    ? 'itemForm.chooseStore'
+                                    : 'itemForm.chooseStoreOptional',
+                                )
+                              }}
+                            </option>
+                            <option
+                              v-for="option in availableStores"
+                              :key="option.value"
+                              :value="option.value"
+                            >
+                              {{ option.value === otherOption ? t('common.other') : option.label }}
+                            </option>
+                          </select>
+                        </SelectControl></label
                       >
                       <label class="item-form-checkbox">
                         <input v-model="isPhysical" type="checkbox" name="IsPhysical" />
@@ -877,7 +906,7 @@ function finishClose() {
                   </template>
                 </fieldset>
               </form>
-              <p v-if="error" role="alert" class="item-form-error">{{ t(error) }}</p>
+              <p v-if="error" role="alert" class="item-form-error">{{ t(error, errorParams) }}</p>
               <div class="item-dialog-actions">
                 <Dialog.CloseTrigger
                   class="item-dialog-cancel"

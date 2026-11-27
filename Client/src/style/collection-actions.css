@@ -5,9 +5,9 @@
   width: 2.75rem;
   padding: 0.5rem;
   transition:
-    background-color 200ms ease-in-out,
-    border-color 200ms ease-in-out,
-    color 200ms ease-in-out;
+    background-color var(--interaction-color-duration, 200ms) ease-in-out,
+    border-color var(--interaction-color-duration, 200ms) ease-in-out,
+    color var(--interaction-color-duration, 200ms) ease-in-out;
 }
 
 .collection-icon-button:hover:not(:disabled) {
@@ -17,14 +17,9 @@
 }
 
 .collection-edit-button {
-  --edit-color: #1d4ed8;
-  --edit-hover-background: #dbeafe;
+  --edit-color: var(--theme-edit-color);
+  --edit-hover-background: var(--theme-edit-hover);
   color: var(--edit-color);
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .collection-edit-button {
-  --edit-color: #60a5fa;
-  --edit-hover-background: #172f4d;
 }
 
 .collection-edit-button:hover:not(:disabled) {
@@ -38,14 +33,9 @@
 }
 
 .collection-delete-button {
-  --delete-color: #b91c1c;
-  --delete-hover-background: #fee2e2;
+  --delete-color: var(--theme-delete-color);
+  --delete-hover-background: var(--theme-delete-hover);
   color: var(--delete-color);
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .collection-delete-button {
-  --delete-color: #fb7185;
-  --delete-hover-background: #431c23;
 }
 
 .collection-delete-button:hover:not(:disabled) {
@@ -67,17 +57,20 @@
   bottom: calc(100% + 0.625rem);
 }
 
-:is(.collection-row-actions, .media-collection-entry) .collection-edit-button {
+:is(.collection-row-actions, .media-collection-entry, .collection-version-control)
+  .collection-edit-button {
   --action-color: var(--edit-color);
   --action-fill: #2563eb;
 }
 
-:is(.collection-row-actions, .media-collection-entry) .collection-delete-button {
+:is(.collection-row-actions, .media-collection-entry, .collection-version-control)
+  .collection-delete-button {
   --action-color: var(--delete-color);
   --action-fill: #b91c1c;
 }
 
-:is(.collection-row-actions, .media-collection-entry) .collection-icon-button {
+:is(.collection-row-actions, .media-collection-entry, .collection-version-control)
+  .collection-icon-button {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
@@ -88,14 +81,15 @@
   background: transparent;
   box-shadow: 0 2px 6px color-mix(in srgb, var(--action-color) 15%, transparent);
   transition:
-    background-color 250ms ease,
-    border-color 250ms ease,
-    color 250ms ease,
+    background-color var(--interaction-color-duration, 250ms) ease,
+    border-color var(--interaction-color-duration, 250ms) ease,
+    color var(--interaction-color-duration, 250ms) ease,
     transform 250ms ease,
-    box-shadow 250ms ease;
+    box-shadow var(--interaction-color-duration, 250ms) ease;
 }
 
-:is(.collection-row-actions, .media-collection-entry) .collection-icon-button:hover:not(:disabled) {
+:is(.collection-row-actions, .media-collection-entry, .collection-version-control)
+  .collection-icon-button:hover:not(:disabled) {
   background: var(--action-fill);
   border-color: var(--action-fill);
   color: #ffffff;
@@ -103,25 +97,28 @@
   box-shadow: 0 4px 12px color-mix(in srgb, var(--action-color) 35%, transparent);
 }
 
-:is(.collection-row-actions, .media-collection-entry) .info-btn-glass {
+:is(.collection-row-actions, .media-collection-entry, .collection-version-control) .info-btn-glass {
   width: 40px;
   height: 40px;
   min-height: 40px;
   font-size: 18px;
 }
 
-:is(.collection-row-actions, .media-collection-entry) .info-btn-glass:hover:not(:disabled) {
+:is(.collection-row-actions, .media-collection-entry, .collection-version-control)
+  .info-btn-glass:hover:not(:disabled) {
   transform: translateY(-2px) scale(1.1);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .collection-icon-button,
-  :is(.collection-row-actions, .media-collection-entry) .collection-icon-button {
+  :is(.collection-row-actions, .media-collection-entry, .collection-version-control)
+    .collection-icon-button {
     transition: none;
   }
-  :is(.collection-row-actions, .media-collection-entry)
+  :is(.collection-row-actions, .media-collection-entry, .collection-version-control)
     .collection-icon-button:hover:not(:disabled),
-  :is(.collection-row-actions, .media-collection-entry) .info-btn-glass:hover:not(:disabled) {
+  :is(.collection-row-actions, .media-collection-entry, .collection-version-control)
+    .info-btn-glass:hover:not(:disabled) {
     transform: none;
   }
 }

@@ -7,6 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddScoped<CollectionRepository>();
+builder.Services.AddScoped<VersionHistoryRepository>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<TmdbTitleService>();
 builder.Services.AddScoped<IgdbSourceService>();
@@ -33,6 +34,15 @@ builder.Services.AddHttpClient<TmdbClient>(client =>
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+// Explicit, one-off maintenance after migration 014; never changes data on startup.
+if (args.Contains("--consolidate-collection-versions"))
+{
+    using var scope = app.Services.CreateScope();
+    var merged = await scope.ServiceProvider.GetRequiredService<CollectionRepository>().ConsolidateVersionsAsync(CancellationToken.None);
+    Console.WriteLine($"Merged {merged} collection rows into existing items.");
+    return;
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

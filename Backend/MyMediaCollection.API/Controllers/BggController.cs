@@ -28,6 +28,7 @@ public sealed class BggController(BggClient bgg, CollectionRepository repository
     }
 
     [HttpPost("import")]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CollectionItem>> Import(BggImportRequest request, CancellationToken cancellationToken)
     {
         try
@@ -35,6 +36,7 @@ public sealed class BggController(BggClient bgg, CollectionRepository repository
             var metadata = await bgg.DetailsAsync(request.BggId, cancellationToken);
             return StatusCode(201, await repository.CreateAsync(request.Item, cancellationToken, bggMetadata: metadata));
         }
+        catch (DuplicateCollectionItemException exception) { return Conflict(new { code = "collection_duplicate", existingItemId = exception.ExistingItemId, name = exception.ExistingName }); }
         catch (CollectionValidationException exception) { return BadRequest(new { message = exception.Message }); }
         catch (BggException exception) { return BggProblem(exception); }
         catch (SqliteException exception)

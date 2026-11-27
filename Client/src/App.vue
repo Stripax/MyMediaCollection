@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import './style/theme-palette.css'
 import { computed, ref, shallowRef } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from './components/TopBar.vue'

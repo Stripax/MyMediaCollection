@@ -277,6 +277,7 @@ describe('Language selector', () => {
     const app = await mountApp()
     const trigger = app.get('.theme-trigger')
     expect(document.documentElement.dataset.theme).toBe('light')
+    expect(document.documentElement.hasAttribute('data-theme-changing')).toBe(false)
     for (const theme of ['dark', 'black', 'light']) {
       await trigger.trigger('click')
       await vi.waitFor(() => expect(trigger.attributes('aria-expanded')).toBe('true'))
@@ -284,11 +285,15 @@ describe('Language selector', () => {
       await app.vm.$nextTick()
       expect(document.documentElement.dataset.theme).toBe(theme)
       expect(localStorage.getItem('mmc-theme')).toBe(theme)
+      expect(document.documentElement.hasAttribute('data-theme-changing')).toBe(true)
       expect(app.find('.matrix-rain').exists()).toBe(theme === 'black')
       expect(document.querySelector('.matrix-rain-toggle') !== null).toBe(theme === 'black')
       expect(document.querySelector('.matrix-rain-settings') !== null).toBe(theme === 'black')
       await vi.waitFor(() => expect(trigger.attributes('aria-expanded')).toBe('false'))
     }
+    await vi.waitFor(() =>
+      expect(document.documentElement.hasAttribute('data-theme-changing')).toBe(false),
+    )
   })
 
   it.each([true, false])('restores the saved code rain preference (%s)', async (enabled) => {

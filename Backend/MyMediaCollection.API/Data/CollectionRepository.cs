@@ -5,7 +5,7 @@ using MyMediaCollection.API.Models;
 
 namespace MyMediaCollection.API.Data;
 
-public sealed class CollectionRepository(IConfiguration configuration, IWebHostEnvironment environment)
+public sealed partial class CollectionRepository(IConfiguration configuration, IWebHostEnvironment environment)
 {
     private SqliteConnection CreateConnection()
     {
@@ -27,6 +27,12 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
+        return await ReadItemsAsync(connection, cancellationToken);
+    }
+
+    private static async Task<IReadOnlyList<CollectionItem>> ReadItemsAsync(SqliteConnection connection, CancellationToken cancellationToken,
+        SqliteTransaction? transaction = null, MediaType? mediaType = null)
+    {
         var command = new CommandDefinition(
             """
             SELECT c."Id", c."Name", c."IsNameCustom", c."MediaType", c."MediaFormat", c."Platform", c."Store", c."IsPhysical", c."IsCompleteBox", c."IsCollection", c."BoardGameKind", c."BaseGamesJson", c."Info", c."CreatedAt", c."UpdatedAt", c."UserId",
@@ -34,11 +40,12 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
             FROM "Collection" c LEFT JOIN "TmdbMetadata" m ON m."Id" = c."TmdbMetadataId"
             LEFT JOIN "IgdbMetadata" g ON g."Id" = c."IgdbMetadataId"
             LEFT JOIN "BggMetadata" b ON b."Id" = c."BggMetadataId"
+            WHERE (@MediaType IS NULL OR c."MediaType" = @MediaType)
             ORDER BY c."Id" DESC;
             """,
-            cancellationToken: cancellationToken);
+            new { MediaType = (int?)mediaType }, transaction, cancellationToken: cancellationToken);
         var items = await connection.QueryAsync<CollectionItem>(command);
-        return await WithSourceMetadataAsync(connection, items.AsList(), cancellationToken);
+        return await WithSourceMetadataAsync(connection, items.AsList(), cancellationToken, transaction);
     }
 
     public async Task<IReadOnlySet<long>?> GetTmdbMemberIdsAsync(long id, CancellationToken cancellationToken)
@@ -60,12 +67,14 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        using var transaction = connection.BeginTransaction();
+        using var transaction = connection.BeginTransaction(deferred: false);
+        var before = (await ReadItemsAsync(connection, cancellationToken, transaction)).FirstOrDefault(item => item.Id == id);
+        if (before is null || request.VersionId is > 0 && !before.Versions.Any(version => version.Id == request.VersionId)) return null;
         var command = new CommandDefinition(
             """
             UPDATE "Collection"
             SET "Name" = CASE WHEN @NameWasEdited = 0 AND "TmdbMetadataId" IS NOT NULL THEN "Name" ELSE @Name END,
-                "IsNameCustom" = CASE WHEN @NameWasEdited = 1 OR (@NameWasEdited IS NULL AND "Name" <> @Name) THEN 1 ELSE "IsNameCustom" END, "MediaType" = @MediaType, "MediaFormat" = @MediaFormat, "Platform" = @Platform, "Store" = @Store, "IsPhysical" = @IsPhysical, "IsCollection" = CASE WHEN @MediaType IN (1,2) THEN COALESCE(@IsCollection,"IsCollection") ELSE 0 END, "IsCompleteBox" = CASE WHEN @IsCollection = 1 THEN 0 WHEN @MediaType = 2 THEN COALESCE(@IsCompleteBox, "IsCompleteBox") ELSE 0 END, "Info" = @Info,
+                "IsNameCustom" = CASE WHEN @NameWasEdited = 1 OR (@NameWasEdited IS NULL AND "Name" <> @Name) THEN 1 ELSE "IsNameCustom" END, "MediaType" = @MediaType, "MediaFormat" = CASE WHEN @VersionId > 0 THEN "MediaFormat" ELSE @MediaFormat END, "Platform" = CASE WHEN @VersionId > 0 THEN "Platform" ELSE @Platform END, "Store" = CASE WHEN @VersionId > 0 THEN "Store" ELSE @Store END, "IsPhysical" = CASE WHEN @VersionId > 0 THEN "IsPhysical" ELSE @IsPhysical END, "IsCollection" = CASE WHEN @MediaType IN (1,2) THEN COALESCE(@IsCollection,"IsCollection") ELSE 0 END, "IsCompleteBox" = CASE WHEN @VersionId > 0 THEN "IsCompleteBox" WHEN @IsCollection = 1 THEN 0 WHEN @MediaType = 2 THEN COALESCE(@IsCompleteBox, "IsCompleteBox") ELSE 0 END, "Info" = CASE WHEN @VersionId > 0 THEN "Info" ELSE @Info END,
                 "UpdatedAt" = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
                 "TmdbMetadataId" = CASE WHEN "MediaType" = @MediaType THEN "TmdbMetadataId" ELSE NULL END,
                 "IgdbMetadataId" = CASE WHEN "MediaType" = @MediaType THEN "IgdbMetadataId" ELSE NULL END,
@@ -83,7 +92,7 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
             """,
             new
             {
-                Id = id, request.IsCompleteBox, request.IsCollection, Name = request.Name.Trim(), request.NameWasEdited, MediaType = (int)request.MediaType,
+                Id = id, request.VersionId, request.IsCompleteBox, request.IsCollection, Name = request.Name.Trim(), request.NameWasEdited, MediaType = (int)request.MediaType,
                 MediaFormat = (int?)request.MediaFormat, Platform = (int?)request.Platform, Store = (int?)request.Store,
                 IsPhysical = request.MediaType == MediaType.VideoGame ? request.IsPhysical ?? false : (bool?)null,
                 Info = string.IsNullOrWhiteSpace(request.Info) ? null : request.Info.Trim()
@@ -101,8 +110,14 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
             await SaveTmdbMetadataAsync(connection, translation, cancellationToken, transaction);
         item = await SaveBoardGameDetailsAsync(connection, transaction, item, request, cancellationToken);
         item = await SaveCollectionContentsAsync(connection, transaction, item, request, cancellationToken, null, attachments);
-        await SaveOwnershipAsync(connection, transaction, item, request, cancellationToken);
+        if (request.VersionId is > 0)
+            await SaveVersionAsync(connection, transaction, before, request, cancellationToken);
+        else
+            await SaveOwnershipAsync(connection, transaction, item, request, cancellationToken);
         var result = (await WithSourceMetadataAsync(connection, [item], cancellationToken, transaction))[0];
+        var editedVersion = result.Versions.Single(version => version.Id == (request.VersionId ?? 0));
+        if (result.Versions.Any(version => version.Id != editedVersion.Id && CollectionDuplicates.SameVersion(result.MediaType, version, editedVersion)))
+            throw new DuplicateCollectionItemException(result);
         transaction.Commit();
         return result;
     }
@@ -122,7 +137,7 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
 
-        using var transaction = connection.BeginTransaction();
+        using var transaction = connection.BeginTransaction(deferred: false);
         long? metadataId = null;
         long? igdbMetadataId = null;
         long? bggMetadataId = null;
@@ -182,8 +197,9 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
         var complete = await WithSourceMetadataAsync(connection,
             [item with { TmdbId = metadata?.TmdbId, PosterPath = metadata?.PosterPath, IgdbId = igdbMetadata?.IgdbId, CoverImageId = igdbMetadata?.CoverImageId, BggId = bggMetadata?.BggId, BggImageUrl = bggMetadata?.ImageUrl }],
             cancellationToken, transaction);
+        var saved = await MergeCreatedAsync(connection, transaction, complete[0], cancellationToken);
         transaction.Commit();
-        return complete[0];
+        return saved;
     }
 
     public async Task CacheTmdbMetadataAsync(TmdbMetadata metadata, CancellationToken cancellationToken)
@@ -315,10 +331,11 @@ public sealed class CollectionRepository(IConfiguration configuration, IWebHostE
             (await connection.QueryAsync<ParentGameRow>(new CommandDefinition(
                 "SELECT c.Id, c.Name, c.MediaType, b.BggId FROM Collection c LEFT JOIN BggMetadata b ON b.Id=c.BggMetadataId WHERE c.Id IN @Ids;",
                 new { Ids = parentIds }, transaction, cancellationToken: cancellationToken))).ToDictionary(parent => parent.Id);
-        return enriched.Select(item => item with { BaseGames = item.BaseGames.Select(game =>
+        var resolved = enriched.Select(item => item with { BaseGames = item.BaseGames.Select(game =>
             game.CollectionItemId is long parentId && parents.TryGetValue(parentId, out var parent) && parent.MediaType == MediaType.BoardGame && parentId != item.Id
                 ? game with { Name = parent.Name, BggId = parent.BggId }
                 : game with { CollectionItemId = null }).ToArray() }).ToList();
+        return await AttachVersionsAsync(connection, transaction, resolved, cancellationToken);
     }
 
     private sealed class ParentGameRow

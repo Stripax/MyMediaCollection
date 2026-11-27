@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { Menu } from '@ark-ui/vue/menu'
 import ToolbarTooltip from './ToolbarTooltip.vue'
 import ToolbarIcon from './ToolbarIcon.vue'
@@ -7,6 +7,7 @@ import ThemePreview from './ThemePreview.vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import LanguageSelector from './LanguageSelector.vue'
+import VersionHistoryDialog from './VersionHistoryDialog.vue'
 
 // Saved choices take precedence over the device defaults.
 const { t, locale: language } = useI18n({ useScope: 'global' })
@@ -73,6 +74,11 @@ const theme = ref(
     ? savedTheme
     : deviceTheme(),
 )
+let themeTransitionTimer: ReturnType<typeof setTimeout> | undefined
+onBeforeUnmount(() => {
+  clearTimeout(themeTransitionTimer)
+  delete document.documentElement.dataset.themeChanging
+})
 const matrixRain = ref(readPreference('mmc-matrix-rain') !== 'false')
 const rainDefaults = { speed: 100, brightness: 55, density: 100 }
 const rainSettings = reactive({
@@ -117,8 +123,19 @@ watch(
 
 watch(
   theme,
-  (value) => {
-    document.documentElement.dataset.theme = value
+  (value, previous) => {
+    const root = document.documentElement
+    if (previous !== undefined && value !== previous) {
+      clearTimeout(themeTransitionTimer)
+      root.dataset.themeChanging = ''
+      const duration =
+        Number.parseFloat(getComputedStyle(root).getPropertyValue('--theme-color-duration')) || 300
+      // Let the shared color blend settle before restoring hover transitions.
+      themeTransitionTimer = setTimeout(() => {
+        delete root.dataset.themeChanging
+      }, duration + 50)
+    }
+    root.dataset.theme = value
     emit('theme-change', value)
     savePreference('mmc-theme', value)
   },
@@ -128,10 +145,14 @@ watch(
 
 <template>
   <header class="top-bar">
-    <RouterLink class="brand" :to="{ name: 'home' }">
-      <img :src="brandIcon" class="brand-icon" width="32" height="32" alt="" aria-hidden="true" />
-      <span>{{ t('title') }}</span>
-    </RouterLink>
+    <div class="top-bar-brand">
+      <RouterLink class="brand" :to="{ name: 'home' }">
+        <img :src="brandIcon" class="brand-icon" width="32" height="32" alt="" aria-hidden="true" />
+        <span>{{ t('title') }}</span>
+      </RouterLink>
+      <span class="toolbar-divider" aria-hidden="true" />
+      <VersionHistoryDialog />
+    </div>
 
     <div class="settings" role="group" :aria-label="t('settings')">
       <ToolbarTooltip v-slot="{ describedby }" text="Github">

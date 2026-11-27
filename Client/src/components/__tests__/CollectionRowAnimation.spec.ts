@@ -130,7 +130,7 @@ describe('Vue table row transitions', () => {
     },
   )
 
-  it('replaces category rows together with their columns without animating the old rows out', async () => {
+  it('slides the old category out before switching columns and sliding the new category in', async () => {
     const table = mountTable()
     const game: CollectionItem = {
       ...original,
@@ -143,19 +143,60 @@ describe('Vue table row transitions', () => {
     await table.setProps({ items: [original, game] })
     await vi.waitFor(() => expect(table.find('.collection-row-enter-active').exists()).toBe(false))
     const previousBody = table.get('tbody').element
+    const previousRows = table.findAll('tbody tr').map((row) => row.element)
     await table.setProps({ category: 'videoGames' })
-    expect(previousBody.isConnected).toBe(false)
+    expect(table.findAll('.collection-row-leave-active')).toHaveLength(2)
+    expect(table.get('table').attributes('data-category')).toBe('all')
+    expect(table.find('th.collection-category').exists()).toBe(true)
+    expect(table.find('.collection-empty').exists()).toBe(false)
+    for (const row of previousRows) {
+      expect(row.getAttribute('aria-hidden')).toBe('true')
+      expect((row as HTMLTableRowElement).inert).toBe(true)
+    }
+    await vi.waitFor(() =>
+      expect(table.get('table').attributes('data-category')).toBe('videoGames'),
+    )
+    expect(previousBody.isConnected).toBe(true)
     expect(table.findAll('tbody')).toHaveLength(1)
-    expect(table.findAll('tbody tr')).toHaveLength(1)
     expect(table.get('tbody .collection-name-button').text()).toBe('Peli')
-    expect(table.findAll('thead th')).toHaveLength(3)
-    expect(table.find('.collection-row-leave-active').exists()).toBe(false)
-    expect(table.find('.collection-row-enter-active').exists()).toBe(false)
+    expect(table.get('tbody tr').classes()).toContain('collection-row-enter-active')
+    expect(table.find('th.collection-copy-type').exists()).toBe(true)
+    expect(previousRows.every((row) => !row.isConnected)).toBe(true)
     await table.setProps({ category: 'movies' })
-    expect(table.findAll('tbody tr')).toHaveLength(1)
+    await vi.waitFor(() => expect(table.get('table').attributes('data-category')).toBe('movies'))
     expect(table.get('tbody .collection-name-button').text()).toBe(original.name)
     expect(table.findAll('thead th')).toHaveLength(2)
+  })
+
+  it('finishes a rapid category change with only the latest category rows and columns', async () => {
+    const table = mountTable()
+    const game: CollectionItem = {
+      ...original,
+      id: 3,
+      name: 'Peli',
+      mediaType: 3,
+      mediaFormat: null,
+      platform: 9,
+    }
+    const series: CollectionItem = { ...original, id: 4, name: 'Sarja', mediaType: 2 }
+    await table.setProps({ items: [original, game, series] })
+    await vi.waitFor(() => expect(table.find('.collection-row-enter-active').exists()).toBe(false))
+    await table.setProps({ category: 'movies' })
+    await table.setProps({ category: 'videoGames' })
+    await table.setProps({ category: 'tvSeries' })
+    await vi.waitFor(() => expect(table.get('table').attributes('data-category')).toBe('tvSeries'))
+    expect(table.findAll('tbody tr')).toHaveLength(1)
+    expect(table.get('tbody .collection-name-button').text()).toBe('Sarja')
+    expect(table.findAll('thead th')).toHaveLength(2)
     expect(table.find('.collection-row-leave-active').exists()).toBe(false)
+    await table.setProps({ category: 'boardGames' })
+    await vi.waitFor(() =>
+      expect(table.get('table').attributes('data-category')).toBe('boardGames'),
+    )
+    expect(table.get('.collection-empty').text()).toBe(fi.collection.emptyCategory)
+    await table.setProps({ category: 'movies' })
+    await vi.waitFor(() => expect(table.get('table').attributes('data-category')).toBe('movies'))
+    expect(table.get('tbody .collection-name-button').text()).toBe(original.name)
   })
 
   it('animates insertions and deletions while preserving unchanged rows and the empty state', async () => {
@@ -196,6 +237,6 @@ describe('Vue table row transitions', () => {
     expect(row.attributes('aria-hidden')).toBeUndefined()
     expect((row.element as HTMLTableRowElement).inert).not.toBe(true)
     expect((row.element as HTMLElement).style.position).toBe('')
-    expect(row.findAll('button')).toHaveLength(4)
+    expect(row.findAll('button')).toHaveLength(5)
   })
 })

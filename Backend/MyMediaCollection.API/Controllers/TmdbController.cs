@@ -34,6 +34,7 @@ public sealed class TmdbController(TmdbClient tmdb, CollectionRepository reposit
     }
 
     [HttpPost("import")]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CollectionItem>> Import(TmdbImportRequest request, CancellationToken cancellationToken)
     {
         try
@@ -56,6 +57,7 @@ public sealed class TmdbController(TmdbClient tmdb, CollectionRepository reposit
                 translations: translations, useLocalizedName: request.UseLocalizedName,
                 collectionMetadata: request.Item.IsCollection == true ? members : null));
         }
+        catch (DuplicateCollectionItemException exception) { return Conflict(new { code = "collection_duplicate", existingItemId = exception.ExistingItemId, name = exception.ExistingName }); }
         catch (CollectionValidationException exception) { return BadRequest(new { message=exception.Message }); }
         catch (TmdbException exception) { return TmdbProblem(exception); }
         catch (SqliteException exception)

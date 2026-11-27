@@ -49,11 +49,11 @@
 }
 
 .item-dialog {
-  --dialog-cancel-highlight: #1d4ed8;
-  --dialog-cancel-background: #dbeafe;
-  --dialog-danger: #b91c1c;
-  --dialog-danger-hover: #991b1b;
-  --dialog-danger-text: #ffffff;
+  --dialog-cancel-highlight: var(--theme-cancel-highlight);
+  --dialog-cancel-background: var(--theme-cancel-background);
+  --dialog-danger: var(--theme-danger);
+  --dialog-danger-hover: var(--theme-danger-hover);
+  --dialog-danger-text: var(--theme-danger-text);
   width: 100%;
   max-width: 32rem;
   max-height: calc(100dvh - 2rem);
@@ -66,24 +66,12 @@
   box-shadow: 0 16px 48px #00000040;
 }
 
-:root[data-theme='dark'] .item-dialog {
-  --dialog-cancel-highlight: #93c5fd;
-  --dialog-cancel-background: #172f4d;
-}
-
-:root[data-theme='black'] .item-dialog {
-  --dialog-cancel-highlight: #60a5fa;
-  --dialog-cancel-background: #122439;
+.item-dialog-add {
+  max-width: 56rem;
 }
 
 .item-dialog-edit {
   max-width: 44rem;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .item-dialog {
-  --dialog-danger: #f87171;
-  --dialog-danger-hover: #fca5a5;
-  --dialog-danger-text: #450a0a;
 }
 
 .item-dialog-with-details {
@@ -248,9 +236,9 @@
 .item-dialog-cancel,
 .collection-delete-confirm {
   transition:
-    background-color 200ms ease,
-    border-color 200ms ease,
-    color 200ms ease;
+    background-color var(--interaction-color-duration, 200ms) ease,
+    border-color var(--interaction-color-duration, 200ms) ease,
+    color var(--interaction-color-duration, 200ms) ease;
 }
 
 .collection-delete-confirm {

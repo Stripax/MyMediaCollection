@@ -16,6 +16,7 @@
 }
 
 .collection-search {
+  position: relative;
   display: flex;
   align-items: flex-end;
   flex-wrap: wrap;
@@ -35,7 +36,7 @@
   width: 100%;
   min-width: 0;
   min-height: 2.75rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 3rem 0.5rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   background: var(--surface);
@@ -49,11 +50,36 @@
   outline-offset: 3px;
 }
 
+.collection-search .collection-search-clear-tooltip {
+  position: absolute;
+  right: 0.375rem;
+  bottom: 0.375rem;
+}
+
+.collection-search-clear-tooltip .toolbar-tooltip-content {
+  top: auto;
+  bottom: calc(100% + 0.625rem);
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
 .collection-search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0.375rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--text);
   transition:
-    background-color 200ms ease-in-out,
-    border-color 200ms ease-in-out,
-    color 200ms ease-in-out;
+    background-color var(--interaction-color-duration, 200ms) ease-in-out,
+    border-color var(--interaction-color-duration, 200ms) ease-in-out,
+    color var(--interaction-color-duration, 200ms) ease-in-out;
 }
 
 .collection-search button:hover:not(:disabled) {
@@ -62,8 +88,13 @@
   color: var(--accent);
 }
 
-.collection-search button:disabled {
-  opacity: 0.6;
+.collection-search-clear svg {
+  width: 100%;
+  height: 100%;
+}
+
+.collection-search-field input::-webkit-search-cancel-button {
+  appearance: none;
 }
 
 .collection-table-scroll {
@@ -100,7 +131,7 @@
 .collection-item-row {
   --row-background: var(--surface);
   background-color: var(--row-background);
-  transition: background-color 200ms ease-in-out;
+  transition: background-color var(--interaction-color-duration, 200ms) ease-in-out;
 }
 
 .collection-row-updated {
@@ -122,7 +153,7 @@
   transition:
     transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 320ms ease-out,
-    background-color 200ms ease-in-out;
+    background-color var(--interaction-color-duration, 200ms) ease-in-out;
 }
 
 .collection-row-leave-active {
@@ -133,7 +164,7 @@
   transition:
     transform 320ms ease-in,
     opacity 320ms ease-in,
-    background-color 200ms ease-in-out;
+    background-color var(--interaction-color-duration, 200ms) ease-in-out;
 }
 
 .collection-row-enter-from {
@@ -163,12 +194,73 @@
   width: auto;
 }
 
+.collection-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  transition: color var(--interaction-color-duration, 200ms) ease;
+}
+
+.collection-sort-button:hover {
+  color: var(--accent);
+}
+
+.collection-sort-button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.collection-sort-tooltip .toolbar-tooltip-content {
+  left: 0;
+  transform: none;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 8rem));
+  white-space: normal;
+  font-weight: 400;
+}
+
 .collection-table th:is(.collection-category, .collection-copy-type) {
   width: 12%;
 }
 
+.collection-category-button {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  transition: color var(--interaction-color-duration, 200ms) ease;
+}
+
+.collection-category-button:hover {
+  color: var(--text);
+}
+
+.collection-category-tooltip .toolbar-tooltip-content {
+  left: 0;
+  transform: none;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 8rem));
+  white-space: normal;
+  font-weight: 400;
+}
+
 .collection-table th:last-child {
   width: 10.5rem;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .collection-table td:first-child {
@@ -210,6 +302,13 @@
 .collection-name-label {
   flex: 1;
   min-width: 0;
+}
+
+.collection-platform-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
 }
 
 .collection-name-label .collection-name-button {
@@ -259,15 +358,27 @@
   margin-bottom: 1rem;
 }
 
+.collection-table .collection-actions-cell {
+  vertical-align: middle;
+  text-align: center;
+}
+
 .collection-row-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 0.5rem;
   min-width: 8.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .collection-sort-button {
+    transition: none;
+  }
+  .collection-category-button {
+    transition: none;
+  }
   .collection-row-updated {
     animation: none;
     background-color: color-mix(in srgb, var(--accent) 20%, var(--surface));

@@ -42,7 +42,7 @@ describe('Vue dialog transitions', () => {
     const panel = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!)
     const layer = panel.element.closest<HTMLElement>('.item-dialog-layer')!
     await vi.waitFor(() => expect(layer.classList.contains('item-modal-enter-active')).toBe(false))
-    await panel.get('button').trigger('click')
+    await panel.get('.item-dialog-cancel').trigger('click')
     expect(layer.classList.contains('item-modal-leave-active')).toBe(true)
     expect(layer.style.display).not.toBe('none')
     expect(panel.element.hidden).toBe(false)

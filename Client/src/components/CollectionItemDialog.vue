@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SelectControl from './SelectControl.vue'
+import DeleteCollectionVersionDialog from './DeleteCollectionVersionDialog.vue'
 import { Dialog } from '@ark-ui/vue/dialog'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -23,6 +25,8 @@ import { displayItemName } from '../models/itemNames'
 import { itemNoticeKey } from '../models/itemNotices'
 import { igdbPlatformOptions } from '../models/igdb'
 import {
+  itemVersions,
+  versionFormats,
   mediaCategories as mediaTypes,
   mediaFormats,
   boardGameFormats,
@@ -51,6 +55,41 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ saved: []; closed: [] }>()
 const form = reactive({ MediaType: 1, Name: '', MediaFormat: 1, Info: '' })
+const selectedVersion = ref(0)
+const versions = computed(() => (props.item ? itemVersions(props.item) : []))
+const selectedOwnedVersion = computed(() =>
+  versions.value.find((version) => version.id === selectedVersion.value),
+)
+const versionDialogOpen = ref(false)
+function versionDeleted() {
+  // Reopen from the refreshed item rather than retaining drafts for a removed version.
+  open.value = false
+  emit('saved')
+}
+function versionLabel(version: import('../models/collection').CollectionVersion) {
+  if (props.item?.mediaType === 3) {
+    const option = gamePlatforms.find((option) => option.value === version.platform)
+    return option ? optionLabel(option) : '—'
+  }
+  return versionFormats(version)
+    .map((value) => {
+      const option = mediaFormats.find((option) => option.value === value)
+      return option ? optionLabel(option) : '—'
+    })
+    .join(' / ')
+}
+function chooseVersion() {
+  const version = versions.value.find((version) => version.id === selectedVersion.value)
+  if (!version) return
+  selectedPlatform.value = version.platform ?? ''
+  isPhysical.value = version.isPhysical ?? false
+  selectedStore.value = version.isPhysical ? '' : (version.store ?? '')
+  form.MediaFormat = version.mediaFormat ?? 1
+  form.Info = version.info ?? ''
+  isCompleteBox.value = version.isCompleteBox ?? false
+  ownedSeasons.value = version.ownedSeasons?.map((season) => ({ ...season })) ?? []
+  ownershipVersion.value++
+}
 const selectedPlatform = ref<number | ''>('')
 const selectedStore = ref<number | ''>('')
 const availableStores = computed(() => gameStoreOptions(selectedPlatform.value))
@@ -99,7 +138,7 @@ const availablePlatforms = computed(() =>
 const savedPlatform = computed(() =>
   gamePlatforms.find(
     (platform) =>
-      platform.value === props.item?.platform &&
+      platform.value === selectedPlatform.value &&
       !availablePlatforms.value.some((option) => option.value === platform.value),
   ),
 )
@@ -111,9 +150,11 @@ const formCategory = computed(
 const open = ref(false)
 const saving = ref(false)
 const error = ref('')
+const errorParams = ref<Record<string, string>>({})
 const { show, dismissMessage } = useSnackbar()
 const pendingSave = ref(false)
 let savedName = ''
+let versionAdded = false
 let savedMediaType = 1
 let savedId: number | undefined
 const transitioning = ref(false)
@@ -156,7 +197,9 @@ function finishClose() {
   pendingSave.value = false
   Object.assign(form, { MediaType: 1, Name: '', MediaFormat: 1, Info: '' })
   show(
-    itemNoticeKey(props.item ? 'updated' : 'saved', savedMediaType),
+    versionAdded
+      ? 'itemForm.versionAdded'
+      : itemNoticeKey(props.item ? 'updated' : 'saved', savedMediaType),
     'success',
     {
       name: savedName,
@@ -201,6 +244,7 @@ function addTmdbMember(member: TmdbResult) {
 }
 
 function prepareForm() {
+  selectedVersion.value = 0
   inspectedTmdbId.value =
     props.item?.tmdbId !== props.item?.collectionContents?.[0]?.tmdbId
       ? (props.item?.tmdbId ?? null)
@@ -291,6 +335,7 @@ async function save() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          ...(props.item && selectedVersion.value > 0 ? { VersionId: selectedVersion.value } : {}),
           Name: requestedName,
           MediaFormat: isTabletopGame.value
             ? selectedBoardFormat.value
@@ -338,6 +383,15 @@ async function save() {
       },
     )
     if (!response.ok) {
+      if (response.status === 409) {
+        const problem = await response.json().catch(() => ({}))
+        if (problem.code === 'collection_duplicate') {
+          reportError('itemForm.duplicate', {
+            name: typeof problem.name === 'string' ? problem.name : requestedName,
+          })
+          return
+        }
+      }
       reportError(
         response.status === 400
           ? 'itemForm.validationError'
@@ -350,7 +404,8 @@ async function save() {
     const saved = await response.json().catch(() => null)
     savedId =
       props.item?.id ?? (Number.isSafeInteger(saved?.id) && saved.id > 0 ? saved.id : undefined)
-    savedName = requestedName
+    versionAdded = saved?.versionAdded === true
+    savedName = versionAdded && saved?.name ? displayItemName(saved, locale.value) : requestedName
     savedMediaType = requestedMediaType
     pendingSave.value = true
     open.value = false
@@ -371,9 +426,10 @@ function openEditor(target: HTMLElement) {
 
 defineExpose({ openEditor })
 
-function reportError(message: string) {
+function reportError(message: string, params: Record<string, string> = {}) {
   error.value = message
-  show(message, 'error')
+  errorParams.value = params
+  show(message, 'error', params)
 }
 </script>
 
@@ -381,8 +437,8 @@ function reportError(message: string) {
   <Dialog.Root
     v-model:open="open"
     :persistent-elements="snackbarElements()"
-    :close-on-escape="!saving"
-    :close-on-interact-outside="!saving"
+    :close-on-escape="!saving && !versionDialogOpen"
+    :close-on-interact-outside="!saving && !versionDialogOpen"
     lazy-mount
   >
     <ToolbarTooltip
@@ -426,6 +482,7 @@ function reportError(message: string) {
             <Dialog.Content
               class="item-dialog"
               :class="{
+                'item-dialog-add': !item,
                 'item-dialog-edit': !!item,
                 'item-dialog-with-details': !!item?.sourceMetadata,
               }"
@@ -499,20 +556,53 @@ function reportError(message: string) {
                   :aria-busy="saving"
                   @submit.prevent="save"
                 >
-                  <fieldset class="item-form-fields" :disabled="saving">
+                  <fieldset class="item-form-fields" :disabled="saving || versionDialogOpen">
                     <dl v-if="item" class="item-form-category">
                       <dt>{{ t('itemForm.category') }}</dt>
                       <dd>{{ t(`sidebar.${formCategory}`) }}</dd>
                     </dl>
                     <label v-else-if="category === 'all'" class="item-form-field">
                       <span>{{ t('itemForm.category') }}</span>
-                      <select v-model.number="form.MediaType" name="MediaType">
-                        <option v-for="type in mediaTypes" :key="type.value" :value="type.value">
-                          {{ t(type.label) }}
-                        </option>
-                      </select>
+                      <SelectControl>
+                        <select v-model.number="form.MediaType" name="MediaType">
+                          <option v-for="type in mediaTypes" :key="type.value" :value="type.value">
+                            {{ t(type.label) }}
+                          </option>
+                        </select>
+                      </SelectControl>
                     </label>
-                    <label v-if="hasMediaFormat" class="item-form-checkbox">
+                    <div v-if="item && versions.length > 1" class="collection-version-control">
+                      <label class="item-form-field">
+                        <span>{{ t('itemForm.version') }}</span>
+                        <SelectControl>
+                          <select
+                            v-model.number="selectedVersion"
+                            name="VersionId"
+                            @change="chooseVersion"
+                          >
+                            <option
+                              v-for="version in versions"
+                              :key="version.id"
+                              :value="version.id"
+                            >
+                              {{ versionLabel(version) }}
+                            </option>
+                          </select>
+                        </SelectControl>
+                      </label>
+                      <DeleteCollectionVersionDialog
+                        v-if="selectedOwnedVersion"
+                        :item="item"
+                        :version="selectedOwnedVersion"
+                        :label="versionLabel(selectedOwnedVersion)"
+                        @busy="versionDialogOpen = $event"
+                        @deleted="versionDeleted"
+                      />
+                    </div>
+                    <label
+                      v-if="form.MediaType === 1 || item?.isCollection"
+                      class="item-form-checkbox"
+                    >
                       <input v-model="isCollection" name="IsCollection" type="checkbox" />
                       <span>{{ t('mediaCollection.label') }}</span>
                     </label>
@@ -550,34 +640,40 @@ function reportError(message: string) {
 
                     <label v-if="isVideoGame" class="item-form-field">
                       <span>{{ t('itemForm.platform') }}</span>
-                      <select v-model.number="selectedPlatform" name="Platform" required>
-                        <option value="" disabled>{{ t('itemForm.choosePlatform') }}</option>
-                        <option v-if="savedPlatform" :value="savedPlatform.value" disabled>
-                          {{
-                            t('itemForm.currentPlatform', { platform: optionLabel(savedPlatform) })
-                          }}
-                        </option>
-                        <option
-                          v-for="platform in availablePlatforms"
-                          :key="platform.value"
-                          :value="platform.value"
-                        >
-                          {{ optionLabel(platform) }}
-                        </option>
-                      </select>
+                      <SelectControl>
+                        <select v-model.number="selectedPlatform" name="Platform" required>
+                          <option value="" disabled>{{ t('itemForm.choosePlatform') }}</option>
+                          <option v-if="savedPlatform" :value="savedPlatform.value" disabled>
+                            {{
+                              t('itemForm.currentPlatform', {
+                                platform: optionLabel(savedPlatform),
+                              })
+                            }}
+                          </option>
+                          <option
+                            v-for="platform in availablePlatforms"
+                            :key="platform.value"
+                            :value="platform.value"
+                          >
+                            {{ optionLabel(platform) }}
+                          </option>
+                        </select>
+                      </SelectControl>
                     </label>
                     <label v-else-if="isTabletopGame" class="item-form-field">
                       <span>{{ t('itemForm.gameType') }}</span>
-                      <select v-model.number="selectedBoardFormat" name="MediaFormat" required>
-                        <option value="" disabled>{{ t('itemForm.chooseGameType') }}</option>
-                        <option
-                          v-for="format in boardGameFormats"
-                          :key="format.value"
-                          :value="format.value"
-                        >
-                          {{ t(format.label) }}
-                        </option>
-                      </select>
+                      <SelectControl>
+                        <select v-model.number="selectedBoardFormat" name="MediaFormat" required>
+                          <option value="" disabled>{{ t('itemForm.chooseGameType') }}</option>
+                          <option
+                            v-for="format in boardGameFormats"
+                            :key="format.value"
+                            :value="format.value"
+                          >
+                            {{ t(format.label) }}
+                          </option>
+                        </select>
+                      </SelectControl>
                     </label>
                     <label v-else-if="hasMediaFormat" class="item-form-field">
                       <span>{{
@@ -587,18 +683,20 @@ function reportError(message: string) {
                             : 'itemForm.mediaFormat',
                         )
                       }}</span>
-                      <select v-model.number="form.MediaFormat" name="MediaFormat" required>
-                        <option v-if="item?.mediaFormat === null" value="" disabled>
-                          {{ t('itemForm.chooseFormat') }}
-                        </option>
-                        <option
-                          v-for="format in mediaFormats"
-                          :key="format.value"
-                          :value="format.value"
-                        >
-                          {{ optionLabel(format) }}
-                        </option>
-                      </select>
+                      <SelectControl>
+                        <select v-model.number="form.MediaFormat" name="MediaFormat" required>
+                          <option v-if="item?.mediaFormat === null" value="" disabled>
+                            {{ t('itemForm.chooseFormat') }}
+                          </option>
+                          <option
+                            v-for="format in mediaFormats"
+                            :key="format.value"
+                            :value="format.value"
+                          >
+                            {{ optionLabel(format) }}
+                          </option>
+                        </select>
+                      </SelectControl>
                     </label>
                     <TvSeasonOwnership
                       v-if="form.MediaType === 2 && !isCollection"
@@ -612,29 +710,31 @@ function reportError(message: string) {
                     />
                     <label v-if="isVideoGame" class="item-form-field">
                       <span>{{ t('itemForm.store') }}</span>
-                      <select
-                        v-model.number="selectedStore"
-                        name="Store"
-                        :disabled="isPhysical || selectedPlatform === ''"
-                        :required="isPcGame && !isPhysical"
-                      >
-                        <option value="">
-                          {{
-                            t(
-                              isPcGame && !isPhysical
-                                ? 'itemForm.chooseStore'
-                                : 'itemForm.chooseStoreOptional',
-                            )
-                          }}
-                        </option>
-                        <option
-                          v-for="store in availableStores"
-                          :key="store.value"
-                          :value="store.value"
+                      <SelectControl>
+                        <select
+                          v-model.number="selectedStore"
+                          name="Store"
+                          :disabled="isPhysical || selectedPlatform === ''"
+                          :required="isPcGame && !isPhysical"
                         >
-                          {{ optionLabel(store) }}
-                        </option>
-                      </select>
+                          <option value="">
+                            {{
+                              t(
+                                isPcGame && !isPhysical
+                                  ? 'itemForm.chooseStore'
+                                  : 'itemForm.chooseStoreOptional',
+                              )
+                            }}
+                          </option>
+                          <option
+                            v-for="store in availableStores"
+                            :key="store.value"
+                            :value="store.value"
+                          >
+                            {{ optionLabel(store) }}
+                          </option>
+                        </select>
+                      </SelectControl>
                     </label>
                     <label v-if="isVideoGame" class="item-form-checkbox">
                       <input v-model="isPhysical" type="checkbox" name="IsPhysical" />
@@ -650,15 +750,21 @@ function reportError(message: string) {
                       ></textarea>
                     </label>
                   </fieldset>
-                  <p v-if="error" class="item-form-error" role="alert">{{ t(error) }}</p>
+                  <p v-if="error" class="item-form-error" role="alert">
+                    {{ t(error, errorParams) }}
+                  </p>
                   <div class="item-dialog-actions">
                     <Dialog.CloseTrigger
                       class="item-dialog-cancel"
                       type="button"
-                      :disabled="saving"
+                      :disabled="saving || versionDialogOpen"
                       >{{ t('itemForm.close') }}</Dialog.CloseTrigger
                     >
-                    <button class="item-dialog-primary" type="submit" :disabled="saving">
+                    <button
+                      class="item-dialog-primary"
+                      type="submit"
+                      :disabled="saving || versionDialogOpen"
+                    >
                       {{
                         t(
                           saving
@@ -681,3 +787,4 @@ function reportError(message: string) {
 </template>
 
 <style src="../style/collection-item-dialog.css"></style>
+<style src="../style/collection-version-control.css"></style>

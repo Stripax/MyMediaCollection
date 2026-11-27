@@ -47,6 +47,43 @@ afterEach(() => {
 })
 
 describe('TMDB import', () => {
+  it.each(['fi', 'en'])(
+    'shows a duplicate import message and preserves the selected item in %s',
+    async (locale) => {
+      const labels = locale === 'fi' ? fi : en
+      const request = vi
+        .fn()
+        .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [movie] }))
+        .mockResolvedValueOnce(
+          json({ code: 'collection_duplicate', name: 'Already owned', existingItemId: 12 }, 409),
+        )
+      vi.stubGlobal('fetch', request)
+      const dialog = await open('movies', locale)
+      await dialog.get('input[name="TmdbQuery"]').setValue('Matrix')
+      await dialog.get('.tmdb-search-form').trigger('submit')
+      await flushPromises()
+      await dialog.get('.tmdb-result').trigger('click')
+      await dialog.get('textarea[name="Info"]').setValue('Keep these notes')
+      await dialog.get('.tmdb-import-form').trigger('submit')
+      await vi.waitFor(() =>
+        expect(dialog.get('.item-form-error').text()).toBe(
+          labels.itemForm.duplicate.replace('{name}', 'Already owned'),
+        ),
+      )
+      expect(dialog.attributes('data-state')).toBe('open')
+      expect((dialog.get('input[name="Name"]').element as HTMLInputElement).value).toBe(movie.title)
+      expect((dialog.get('textarea[name="Info"]').element as HTMLTextAreaElement).value).toBe(
+        'Keep these notes',
+      )
+      expect(useSnackbar().notice.value).toMatchObject({
+        type: 'error',
+        messageKey: 'itemForm.duplicate',
+        params: { name: 'Already owned' },
+      })
+      expect(wrapper!.emitted('saved')).toBeUndefined()
+    },
+  )
+
   it('inspects any collection member without changing its order or cover', async () => {
     const first = { ...movie, overview: 'First description' }
     const second = {
@@ -97,37 +134,28 @@ describe('TMDB import', () => {
     )
   })
 
-  it('loads and retains details separately for each TV collection member', async () => {
-    const first = { ...movie, mediaType: 2, overview: 'First series overview' }
-    const second = {
-      ...first,
-      tmdbId: 604,
-      title: 'Second series',
-      overview: 'Second series overview',
-    }
+  it('offers complete box ownership instead of collection mode for TV imports', async () => {
+    const series = { ...movie, mediaType: 2, numberOfSeasons: 3, numberOfEpisodes: 30 }
     const request = vi
       .fn()
-      .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [first, second] }))
-      .mockResolvedValueOnce(json({ ...first, numberOfSeasons: 3, numberOfEpisodes: 30 }))
-      .mockResolvedValueOnce(json({ ...second, numberOfSeasons: 5, numberOfEpisodes: 50 }))
+      .mockResolvedValueOnce(json({ page: 1, totalPages: 1, results: [series] }))
+      .mockResolvedValueOnce(json(series))
+      .mockResolvedValueOnce(json({ id: 12 }, 201))
     vi.stubGlobal('fetch', request)
     const dialog = await open('tvSeries')
-    await dialog.get('input[name="IsCollection"]').setValue(true)
+    expect(dialog.find('input[name="IsCollection"]').exists()).toBe(false)
     await dialog.get('input[name="TmdbQuery"]').setValue('Series')
     await dialog.get('.tmdb-search-form').trigger('submit')
     await flushPromises()
-    await dialog.findAll('.tmdb-result')[0]!.trigger('click')
+    await dialog.get('.tmdb-result').trigger('click')
     await flushPromises()
-    await dialog.findAll('.tmdb-result')[1]!.trigger('click')
+    await dialog.get('input[name="IsCompleteBox"]').setValue(true)
+    await dialog.get('.tmdb-import-form').trigger('submit')
     await flushPromises()
-    await vi.waitFor(() => expect(dialog.get('.tmdb-selected').text()).toContain('50'))
-    await dialog.findAll('.collection-member-title')[0]!.trigger('click')
-    await flushPromises()
-    await vi.waitFor(() => expect(dialog.get('.tmdb-selected').text()).toContain('30'))
-    await vi.waitFor(() =>
-      expect(dialog.get('.tmdb-selected').text()).toContain('First series overview'),
-    )
-    expect(request).toHaveBeenCalledTimes(3)
+    const body = JSON.parse(request.mock.calls[2]![1].body)
+    expect(body.item.isCompleteBox).toBe(true)
+    expect(body.item.isCollection).toBeUndefined()
+    await vi.waitFor(() => expect(wrapper!.emitted('saved')).toHaveLength(1))
   })
 
   it('reorders collection entries by dragging and imports the new first title as the cover', async () => {
@@ -387,7 +415,10 @@ describe('TMDB import', () => {
     vi.stubGlobal('fetch', request)
     const dialog = await open('all', 'en')
     expect(dialog.findAll('select[name="TmdbMediaType"] option')).toHaveLength(2)
+    await dialog.get('input[name="IsCollection"]').setValue(true)
     await dialog.get('select[name="TmdbMediaType"]').setValue('2')
+    expect(dialog.find('input[name="IsCollection"]').exists()).toBe(false)
+    expect(dialog.find('.media-collection-selection').exists()).toBe(false)
     await dialog.get('input[name="TmdbQuery"]').setValue('Example')
     await dialog.get('.tmdb-search-form').trigger('submit')
     await flushPromises()

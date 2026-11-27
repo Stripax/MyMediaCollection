@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import '../style/collection-actions.css'
 import CollectionInfoDialog from './CollectionInfoDialog.vue'
+import CollectionFilters from './CollectionFilters.vue'
+import { useCollectionFilters } from '../composables/useCollectionFilters'
 import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import CollectionItemDialog from './CollectionItemDialog.vue'
@@ -22,6 +24,7 @@ import MediaFormatBadges from './MediaFormatBadges.vue'
 import IgdbImportDialog from './IgdbImportDialog.vue'
 import IgdbAttribution from './IgdbAttribution.vue'
 import {
+  itemVersions,
   mediaCategories,
   boardGameFormats,
   type CollectionCategory,
@@ -37,12 +40,50 @@ const props = defineProps<{
   loading: boolean
   error: boolean
 }>()
-const emit = defineEmits<{ retry: []; changed: [] }>()
+const emit = defineEmits<{
+  retry: []
+  changed: []
+  'category-selected': [category: CollectionCategory]
+}>()
 const searchQuery = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
+function clearSearch() {
+  searchQuery.value = ''
+  searchInput.value?.focus({ preventScroll: true })
+}
+const tableCategory = ref(props.category)
+const categoryChanging = ref(false)
+const leavingRows = new Set<Element>()
+let disposed = false
+function finishCategoryChange() {
+  if (disposed || !categoryChanging.value || leavingRows.size) return
+  tableCategory.value = props.category
+  categoryChanging.value = false
+}
+watch(
+  () => props.category,
+  () => {
+    categoryChanging.value = true
+    void nextTick(finishCategoryChange)
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  disposed = true
+  leavingRows.clear()
+})
+const {
+  filters,
+  mediaType: filterMediaType,
+  active: filtersActive,
+  reset: resetFilters,
+  matches: matchesFilters,
+} = useCollectionFilters(() => props.category)
 const tableElement = ref<HTMLTableElement | null>(null)
 const highlights = new Map<number, { row: HTMLElement; timer: ReturnType<typeof setTimeout> }>()
 const editedFields: (keyof CollectionItem)[] = [
   'name',
+  'versions',
   'mediaFormat',
   'platform',
   'store',
@@ -145,13 +186,73 @@ function itemChanged() {
   emit('changed')
 }
 const { t, locale } = useI18n({ useScope: 'global' })
+const nameSort = ref<'ascending' | 'descending' | null>(null)
+const categorySort = ref<'ascending' | 'descending' | null>(null)
+const nextCategorySortAction = computed(() =>
+  categorySort.value === 'ascending'
+    ? 'collection.sortCategoryDescending'
+    : categorySort.value === 'descending'
+      ? 'collection.sortCategoryDefault'
+      : 'collection.sortCategoryAscending',
+)
+watch(
+  () => props.category,
+  (category) => {
+    if (category !== 'all') categorySort.value = null
+  },
+)
+const nextNameSortAction = computed(() =>
+  nameSort.value === 'ascending'
+    ? 'collection.sortNameDescending'
+    : nameSort.value === 'descending'
+      ? 'collection.sortNameDefault'
+      : 'collection.sortNameAscending',
+)
+const sortCollator = computed(
+  () =>
+    new Intl.Collator(locale.value.startsWith('fi') ? 'fi-FI' : 'en-US', {
+      sensitivity: 'base',
+      numeric: true,
+    }),
+)
+function toggleNameSort() {
+  categorySort.value = null
+  nameSort.value =
+    nameSort.value === 'ascending'
+      ? 'descending'
+      : nameSort.value === 'descending'
+        ? null
+        : 'ascending'
+}
+function toggleCategorySort() {
+  nameSort.value = null
+  categorySort.value =
+    categorySort.value === 'ascending'
+      ? 'descending'
+      : categorySort.value === 'descending'
+        ? null
+        : 'ascending'
+}
 const visibleItems = computed(() => {
-  const mediaType = mediaCategories.find((category) => category.id === props.category)?.value
-  return props.items.filter(
+  if (categoryChanging.value) return []
+  const filtered = props.items.filter(
     (item) =>
-      (props.category === 'all' || item.mediaType === mediaType) &&
+      matchesFilters(item) &&
       searchableItemNames(item).some((name) =>
         name.normalize('NFC').toLowerCase().includes(normalizedQuery.value),
+      ),
+  )
+  const sort = nameSort.value ?? categorySort.value
+  if (!sort) return filtered
+  const direction = sort === 'ascending' ? 1 : -1
+  return filtered.sort(
+    (first, second) =>
+      direction *
+      sortCollator.value.compare(
+        categorySort.value ? categoryLabel(first.mediaType) : displayItemName(first, locale.value),
+        categorySort.value
+          ? categoryLabel(second.mediaType)
+          : displayItemName(second, locale.value),
       ),
   )
 })
@@ -159,6 +260,16 @@ const visibleItems = computed(() => {
 function categoryLabel(mediaType: number) {
   const category = mediaCategories.find((category) => category.value === mediaType)
   return t(category?.label ?? 'collection.unknown')
+}
+
+function openCategory(mediaType: number) {
+  const category = mediaCategories.find((category) => category.value === mediaType)
+  if (category) emit('category-selected', category.id)
+}
+
+function categoryTooltip(mediaType: number) {
+  const category = mediaCategories.find((category) => category.value === mediaType)
+  return category ? t(`collection.showCategory.${category.id}`) : ''
 }
 
 function formatLabel(item: CollectionItem) {
@@ -179,6 +290,7 @@ watch(() => props.category, cancelRowMoves, { flush: 'sync' })
 onBeforeUnmount(cancelRowMoves)
 
 function prepareRowLeave(element: Element) {
+  leavingRows.add(element)
   const row = element as HTMLTableRowElement
   const siblings = Array.from(row.parentElement?.children ?? []) as HTMLElement[]
   const capturePositions = () =>
@@ -205,6 +317,8 @@ function prepareRowLeave(element: Element) {
 }
 
 function finishRowLeave(element: Element) {
+  leavingRows.delete(element)
+  void nextTick(finishCategoryChange)
   const row = element as HTMLTableRowElement
   const positions = leavePositions.get(row)
   const listener = leaveListeners.get(row)
@@ -214,7 +328,12 @@ function finishRowLeave(element: Element) {
   row.inert = false
   row.removeAttribute('aria-hidden')
   // A cancelled filter transition leaves the row in place.
-  if (row.isConnected || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  if (
+    categoryChanging.value ||
+    row.isConnected ||
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  )
+    return
   for (const [sibling, previous] of positions ?? []) {
     if (!sibling.isConnected || typeof sibling.animate !== 'function') continue
     rowMoves.get(sibling)?.cancel()
@@ -242,15 +361,38 @@ function finishRowLeave(element: Element) {
         <label class="collection-search-field">
           <span>{{ t('collection.searchLabel') }}</span>
           <input
+            ref="searchInput"
             v-model="searchQuery"
             type="search"
             autocomplete="off"
             :placeholder="t('collection.searchPlaceholder')"
           />
         </label>
-        <button type="button" :disabled="!searchQuery" @click="searchQuery = ''">
-          {{ t('collection.clearSearch') }}
-        </button>
+        <ToolbarTooltip
+          v-if="searchQuery"
+          v-slot="{ describedby }"
+          :text="t('collection.clearSearch')"
+          class="collection-action-tooltip collection-search-clear-tooltip"
+        >
+          <button
+            type="button"
+            class="collection-search-clear"
+            :aria-label="t('collection.clearSearch')"
+            :aria-describedby="describedby"
+            @click="clearSearch"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="m6 6 12 12M6 18 18 6" />
+            </svg>
+          </button>
+        </ToolbarTooltip>
       </div>
       <CollectionItemDialog :category="category" :items="items" @saved="itemChanged" />
       <TmdbImportDialog
@@ -267,7 +409,18 @@ function finishRowLeave(element: Element) {
         @saved="itemChanged"
       />
     </div>
-    <p v-if="normalizedQuery && !loading && !error" aria-live="polite">
+    <CollectionFilters
+      :model-value="filters"
+      :all-categories="category === 'all'"
+      :media-type="filterMediaType"
+      :active="filtersActive"
+      @update:model-value="Object.assign(filters, $event)"
+      @reset="resetFilters"
+    />
+    <p
+      v-if="(normalizedQuery || filtersActive) && !categoryChanging && !loading && !error"
+      aria-live="polite"
+    >
       {{ t('collection.searchResults', { count: visibleItems.length }) }}
     </p>
     <p v-if="loading" role="status">{{ t('collection.loading') }}</p>
@@ -286,23 +439,83 @@ function finishRowLeave(element: Element) {
       <table
         ref="tableElement"
         class="collection-table"
-        :data-category="category"
+        :data-category="tableCategory"
         :aria-label="t('collection.title')"
       >
         <thead>
           <tr>
-            <th scope="col">{{ t('itemForm.name') }}</th>
-            <th v-if="category === 'all'" class="collection-category" scope="col">
-              {{ t('collection.category') }}
+            <th scope="col" :aria-sort="nameSort ?? 'none'">
+              <ToolbarTooltip
+                v-slot="{ describedby }"
+                :text="t(nextNameSortAction)"
+                class="collection-sort-tooltip"
+              >
+                <button
+                  type="button"
+                  class="collection-sort-button"
+                  :aria-label="t(nextNameSortAction)"
+                  :aria-describedby="describedby"
+                  @click="toggleNameSort"
+                >
+                  {{ t('itemForm.name') }}
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path v-if="nameSort === 'ascending'" d="m6 15 6-6 6 6" />
+                    <path v-else-if="nameSort === 'descending'" d="m6 9 6 6 6-6" />
+                    <path v-else d="m8 9 4-4 4 4m-8 6 4 4 4-4" />
+                  </svg>
+                </button>
+              </ToolbarTooltip>
             </th>
-            <th v-if="category === 'videoGames'" class="collection-copy-type" scope="col">
+            <th
+              v-if="tableCategory === 'all'"
+              class="collection-category"
+              scope="col"
+              :aria-sort="categorySort ?? 'none'"
+            >
+              <ToolbarTooltip
+                v-slot="{ describedby }"
+                :text="t(nextCategorySortAction)"
+                class="collection-sort-tooltip"
+              >
+                <button
+                  type="button"
+                  class="collection-sort-button collection-category-sort-button"
+                  :aria-label="t(nextCategorySortAction)"
+                  :aria-describedby="describedby"
+                  @click="toggleCategorySort"
+                >
+                  {{ t('collection.category') }}
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path v-if="categorySort === 'ascending'" d="m6 15 6-6 6 6" />
+                    <path v-else-if="categorySort === 'descending'" d="m6 9 6 6 6-6" />
+                    <path v-else d="m8 9 4-4 4 4m-8 6 4 4 4-4" />
+                  </svg>
+                </button>
+              </ToolbarTooltip>
+            </th>
+            <th v-if="tableCategory === 'videoGames'" class="collection-copy-type" scope="col">
               {{ t('collection.copyType') }}
             </th>
             <th scope="col">{{ t('collection.actions') }}</th>
           </tr>
         </thead>
         <TransitionGroup
-          :key="category"
           tag="tbody"
           name="collection-row"
           @before-leave="prepareRowLeave"
@@ -366,11 +579,14 @@ function finishRowLeave(element: Element) {
                     v-if="item.mediaType === 1 || item.mediaType === 2"
                     :item="item"
                   />
-                  <GamePlatformBadge
-                    v-if="item.mediaType === 3"
-                    :platform="item.platform"
-                    :store="item.store"
-                  />
+                  <div v-if="item.mediaType === 3" class="collection-platform-badges">
+                    <GamePlatformBadge
+                      v-for="version in itemVersions(item)"
+                      :key="version.id"
+                      :platform="version.platform"
+                      :store="version.store"
+                    />
+                  </div>
                   <div v-if="item.mediaType === 4" class="bgg-item-badges">
                     <span
                       v-if="formatLabel(item)"
@@ -430,21 +646,42 @@ function finishRowLeave(element: Element) {
                 </div>
               </div>
             </td>
-            <td v-if="category === 'all'" class="collection-category">
-              {{ categoryLabel(item.mediaType) }}
+            <td v-if="tableCategory === 'all'" class="collection-category">
+              <ToolbarTooltip
+                v-if="mediaCategories.some((category) => category.value === item.mediaType)"
+                v-slot="{ describedby }"
+                :text="categoryTooltip(item.mediaType)"
+                class="collection-action-tooltip collection-category-tooltip"
+              >
+                <button
+                  type="button"
+                  class="collection-category-button"
+                  :aria-describedby="describedby"
+                  @click="openCategory(item.mediaType)"
+                >
+                  {{ categoryLabel(item.mediaType) }}
+                </button>
+              </ToolbarTooltip>
+              <span v-else>{{ categoryLabel(item.mediaType) }}</span>
             </td>
-            <td v-if="category === 'videoGames'" class="collection-copy-type">
+            <td v-if="tableCategory === 'videoGames'" class="collection-copy-type">
               {{
-                t(
-                  item.isPhysical === true
-                    ? 'collection.physicalCopy'
-                    : item.isPhysical === false
-                      ? 'collection.digitalCopy'
-                      : 'collection.unknownCopy',
-                )
+                [
+                  ...new Set(
+                    itemVersions(item).map((version) =>
+                      t(
+                        version.isPhysical === true
+                          ? 'collection.physicalCopy'
+                          : version.isPhysical === false
+                            ? 'collection.digitalCopy'
+                            : 'collection.unknownCopy',
+                      ),
+                    ),
+                  ),
+                ].join(' / ')
               }}
             </td>
-            <td>
+            <td class="collection-actions-cell">
               <div class="collection-row-actions">
                 <CollectionInfoDialog :item="item" />
                 <CollectionItemDialog
@@ -457,16 +694,16 @@ function finishRowLeave(element: Element) {
               </div>
             </td>
           </tr>
-          <tr v-if="!visibleItems.length && !loading && !error" key="empty">
+          <tr v-if="!visibleItems.length && !categoryChanging && !loading && !error" key="empty">
             <td
-              :colspan="category === 'all' || category === 'videoGames' ? 3 : 2"
+              :colspan="tableCategory === 'all' || tableCategory === 'videoGames' ? 3 : 2"
               class="collection-empty"
             >
               {{
                 t(
-                  normalizedQuery
+                  normalizedQuery || filtersActive
                     ? 'collection.noMatches'
-                    : category === 'all'
+                    : tableCategory === 'all'
                       ? 'collection.empty'
                       : 'collection.emptyCategory',
                 )

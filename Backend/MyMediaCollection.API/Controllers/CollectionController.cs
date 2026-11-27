@@ -32,6 +32,7 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
     }
 
     [HttpPut("{id:long:min(1)}")]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType<CollectionItem>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -62,6 +63,7 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
             if (item is null) return NotFound();
             return Ok(item);
         }
+        catch (DuplicateCollectionItemException exception) { return Conflict(new { code = "collection_duplicate", existingItemId = exception.ExistingItemId, name = exception.ExistingName }); }
         catch (TmdbException exception)
         {
             return Problem(statusCode: exception.StatusCode, title: "TMDB request failed.",
@@ -73,6 +75,31 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
             logger.LogError(exception, "Could not update collection item {ItemId}.", id);
             return Problem(statusCode: StatusCodes.Status503ServiceUnavailable,
                 title: "The collection item could not be updated. Please try again later.");
+        }
+    }
+
+    [HttpDelete("{id:long:min(1)}/versions/{versionId:long:min(0)}")]
+    [ProducesResponseType<CollectionItem>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<CollectionItem>> DeleteVersion(long id, long versionId,
+        [FromHeader(Name = "If-Match")] string? deletionToken, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(deletionToken)) return BadRequest(new { code = "collection_version_token_required" });
+        try
+        {
+            var (item, error) = await repository.DeleteVersionAsync(id, versionId, deletionToken.Trim('"'), cancellationToken);
+            if (error is not null) return StatusCode(error == "collection_version_changed" ? 412 : 409, new { code = error });
+            if (item is null) return NotFound();
+            return Ok(item);
+        }
+        catch (SqliteException exception)
+        {
+            logger.LogError(exception, "Could not delete version {VersionId} of collection item {ItemId}.", versionId, id);
+            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "The owned version could not be deleted. Please try again later.");
         }
     }
 
@@ -96,6 +123,7 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
     }
 
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType<CollectionItem>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
@@ -106,6 +134,7 @@ public sealed class CollectionController(CollectionRepository repository, TmdbTi
             var item = await repository.CreateAsync(request, cancellationToken);
             return StatusCode(StatusCodes.Status201Created, item);
         }
+        catch (DuplicateCollectionItemException exception) { return Conflict(new { code = "collection_duplicate", existingItemId = exception.ExistingItemId, name = exception.ExistingName }); }
         catch (CollectionValidationException exception) { return BadRequest(new { message = exception.Message }); }
         catch (SqliteException exception)
         {

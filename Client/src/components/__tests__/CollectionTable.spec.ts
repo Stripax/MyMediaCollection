@@ -65,6 +65,81 @@ afterEach(() => {
 })
 
 describe('Collection table in the application', () => {
+  it('refreshes the remaining platform tag on the same row after a version is deleted', async () => {
+    const original: CollectionItem = {
+      id: 12,
+      name: 'Destiny 2',
+      mediaType: 3,
+      mediaFormat: null,
+      platform: 4,
+      info: null,
+      versions: [
+        { id: 0, deletionToken: 'xbox-token', mediaFormat: null, platform: 4, info: null },
+        { id: 20, deletionToken: 'ps-token', mediaFormat: null, platform: 9, info: null },
+      ],
+    }
+    const remaining: CollectionItem = { ...original, versions: [original.versions![0]!] }
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([original]))
+      .mockResolvedValueOnce(jsonResponse(remaining))
+      .mockResolvedValueOnce(jsonResponse([remaining]))
+    vi.stubGlobal('fetch', request)
+    const { app } = await mountApp()
+    await app.get('.collection-edit-button').trigger('click')
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
+    const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!)
+    await dialog.get('select[name="VersionId"]').setValue('20')
+    await dialog.get('.collection-version-delete').trigger('click')
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull())
+    const confirmation = new DOMWrapper(
+      document.querySelector<HTMLElement>('[role="alertdialog"]')!,
+    )
+    await confirmation.get('.collection-version-delete-confirm').trigger('click')
+    await vi.waitFor(() =>
+      expect(app.findAll('.game-platform-badge').map((badge) => badge.text())).toEqual([
+        'Xbox Series S/X',
+      ]),
+    )
+    expect(rowNames(app)).toEqual(['Destiny 2'])
+    expect(request).toHaveBeenNthCalledWith(2, '/api/collection/12/versions/20', {
+      method: 'DELETE',
+      headers: { 'If-Match': '"ps-token"' },
+    })
+  })
+
+  it('refreshes the existing row and shows all formats after adding a version', async () => {
+    const original = { id: 12, name: 'Owned movie', mediaType: 1, mediaFormat: 2, info: null }
+    const merged = {
+      ...original,
+      versionAdded: true,
+      versions: [
+        { id: 0, mediaFormat: 2, info: null },
+        { id: 22, mediaFormat: 1, info: 'New DVD notes' },
+      ],
+    }
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([original]))
+      .mockResolvedValueOnce(jsonResponse(merged))
+      .mockResolvedValueOnce(jsonResponse([merged]))
+    vi.stubGlobal('fetch', request)
+    const { app } = await mountApp()
+    await submitItem(app, 'Owned movie')
+    await vi.waitFor(() =>
+      expect(app.findAll('.media-format-badge').map((badge) => badge.text())).toEqual([
+        'Blu-ray',
+        'DVD',
+      ]),
+    )
+    expect(rowNames(app)).toEqual(['Owned movie'])
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-snackbar-region]')?.textContent).toContain(
+        fi.itemForm.versionAdded.replace('{name}', 'Owned movie'),
+      ),
+    )
+  })
+
   it('shows the full notes in an info dialog and closes it with Cancel or an outside click', async () => {
     const notes = 'Ensimmäinen rivi\nToinen rivi <b>tekstinä</b>'
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([{ ...items[3]!, info: notes }])))
@@ -190,6 +265,13 @@ describe('Collection table in the application', () => {
     expect(app.get('.collection-delete-button').attributes('aria-label')).toBe(
       'Delete item Lautapeli',
     )
+    await app.get('td.collection-category .collection-category-button').trigger('click')
+    await flushPromises()
+    await settleRows()
+    expect(app.get('h1').text()).toBe(en.sidebar.boardGames)
+    expect(rowNames(app)).toEqual(['Lautapeli'])
+    expect(app.get('.side-bar-category[aria-pressed="true"]').text()).toBe(en.sidebar.boardGames)
+    expect(app.find('td.collection-category').exists()).toBe(false)
   })
 
   it.each([
@@ -236,7 +318,7 @@ describe('Collection table in the application', () => {
     await vi.waitFor(() =>
       expect(row.get('.collection-edit-button').attributes('disabled')).toBeUndefined(),
     )
-    await dialog.get('button').trigger('click')
+    await dialog.get('.item-dialog-cancel').trigger('click')
     await vi.waitFor(() => expect(document.activeElement).toBe(name.element))
     await row.get('.collection-edit-button').trigger('click')
     await vi.waitFor(() =>
@@ -475,7 +557,7 @@ describe('Collection table in the application', () => {
       if (category === 'all') {
         expect((categorySelect.element as HTMLSelectElement).value).toBe('1')
       }
-      await dialog.get('button').trigger('click')
+      await dialog.get('.item-dialog-cancel').trigger('click')
       await flushPromises()
       await settleRows()
     }
@@ -534,8 +616,14 @@ describe('Collection table in the application', () => {
     expect(rowNames(app)).toEqual(['Lautapeli'])
     await search.setValue('sarja')
     expect(app.get('.collection-empty').text()).toBe(fi.collection.noMatches)
-    await app.get('.collection-search button').trigger('click')
+    const clear = app.get('.collection-search-clear')
+    expect(clear.text()).toBe('')
+    expect(clear.attributes('aria-label')).toBe(fi.collection.clearSearch)
+    expect(clear.find('svg').exists()).toBe(true)
+    await clear.trigger('click')
     expect((search.element as HTMLInputElement).value).toBe('')
+    expect(document.activeElement).toBe(search.element)
+    expect(app.find('.collection-search-clear').exists()).toBe(false)
     expect(rowNames(app)).toEqual(['Lautapeli'])
     expect(categories[4]!.attributes('aria-pressed')).toBe('true')
     await categories[0]!.trigger('click')
@@ -702,7 +790,7 @@ describe('Collection table in the application', () => {
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
     const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!)
     await dialog.get('input[name="Name"]').setValue('Unsaved name')
-    await dialog.get('button').trigger('click')
+    await dialog.get('.item-dialog-cancel').trigger('click')
     expect(request).toHaveBeenCalledTimes(1)
     expect(rowNames(app)).toContain('TV-sarja')
     await vi.waitFor(() =>
@@ -725,7 +813,7 @@ describe('Collection table in the application', () => {
     const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="alertdialog"]')!)
     expect(dialog.text()).toContain('Lautapeli')
     expect(request).toHaveBeenCalledTimes(1)
-    await dialog.get('button').trigger('click')
+    await dialog.get('.item-dialog-cancel').trigger('click')
     expect(request).toHaveBeenCalledTimes(1)
     expect(rowNames(app)).toHaveLength(4)
     await vi.waitFor(() =>

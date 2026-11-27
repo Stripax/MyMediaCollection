@@ -130,8 +130,8 @@
 .matrix-rain-reset {
   font-size: 0.875rem;
   transition:
-    background-color 200ms ease,
-    border-color 200ms ease;
+    background-color var(--interaction-color-duration, 200ms) ease,
+    border-color var(--interaction-color-duration, 200ms) ease;
 }
 
 .matrix-rain-reset:hover {
@@ -174,7 +174,7 @@
   border: 1px solid var(--border);
   border-radius: 1rem;
   background: var(--switch-background);
-  transition: background-color 200ms ease;
+  transition: background-color var(--interaction-color-duration, 200ms) ease;
 }
 
 .matrix-rain-switch::after {
@@ -259,8 +259,8 @@
   color: var(--text);
   text-decoration: none;
   transition:
-    background-color 160ms ease,
-    color 160ms ease;
+    background-color var(--interaction-color-duration, 160ms) ease,
+    color var(--interaction-color-duration, 160ms) ease;
 }
 .toolbar-button:hover,
 .toolbar-button[data-state='open'] {
@@ -335,7 +335,7 @@
 .cover-tooltip > a {
   transition:
     transform 200ms ease-in-out,
-    box-shadow 200ms ease-in-out;
+    box-shadow var(--interaction-color-duration, 200ms) ease-in-out;
 }
 
 .cover-tooltip > a:is(:hover, :focus-visible) {

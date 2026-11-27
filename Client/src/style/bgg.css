@@ -65,56 +65,36 @@
 }
 
 .bgg-format-badge {
-  --badge-color: #475569;
+  --badge-color: var(--theme-tag-slate);
   background: transparent;
   border-color: var(--badge-color);
 }
 
 .bgg-format-badge[data-game-format='4'] {
-  --badge-color: #155e75;
+  --badge-color: var(--theme-tag-cyan);
 }
 
 .bgg-format-badge[data-game-format='5'] {
-  --badge-color: #9d174d;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .bgg-format-badge {
-  --badge-color: #cbd5e1;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .bgg-format-badge[data-game-format='4'] {
-  --badge-color: #67e8f9;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .bgg-format-badge[data-game-format='5'] {
-  --badge-color: #f9a8d4;
+  --badge-color: var(--theme-tag-pink);
 }
 
 .bgg-base-game-badge {
-  --badge-color: #92400e;
+  --badge-color: var(--theme-tag-amber);
 }
 
 .bgg-other-game-badge {
-  --badge-color: #7e22ce;
-}
-
-:root:is([data-theme='dark'], [data-theme='black']) .bgg-other-game-badge {
-  --badge-color: #d8b4fe;
+  --badge-color: var(--theme-tag-other);
 }
 
 span.bgg-required-game-badge {
   cursor: default;
 }
 
-:root:is([data-theme='dark'], [data-theme='black']) .bgg-base-game-badge {
-  --badge-color: #fbbf24;
-}
-
 .bgg-required-game-badge {
   text-align: left;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 200ms ease-in-out;
+  transition: background-color var(--interaction-color-duration, 200ms) ease-in-out;
 }
 
 .bgg-required-game-badge:hover {

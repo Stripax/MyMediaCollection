@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectControl from './SelectControl.vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mediaFormats, otherOption, type OwnedSeason, type TmdbSeason } from '../models/collection'
@@ -122,22 +123,24 @@ function setFormat(number: number, value: string) {
           }}</small></span
         >
       </label>
-      <select
-        :name="`SeasonFormat${season.seasonNumber}`"
-        :aria-label="t('tvOwnership.seasonFormat', { number: season.seasonNumber })"
-        :disabled="
-          completeBox || !ownedSeasons.some((owned) => owned.seasonNumber === season.seasonNumber)
-        "
-        :value="
-          ownedSeasons.find((owned) => owned.seasonNumber === season.seasonNumber)?.mediaFormat ??
-          defaultFormat
-        "
-        @change="setFormat(season.seasonNumber, ($event.target as HTMLSelectElement).value)"
-      >
-        <option v-for="format in mediaFormats" :key="format.value" :value="format.value">
-          {{ format.value === otherOption ? t('common.other') : format.label }}
-        </option>
-      </select>
+      <SelectControl>
+        <select
+          :name="`SeasonFormat${season.seasonNumber}`"
+          :aria-label="t('tvOwnership.seasonFormat', { number: season.seasonNumber })"
+          :disabled="
+            completeBox || !ownedSeasons.some((owned) => owned.seasonNumber === season.seasonNumber)
+          "
+          :value="
+            ownedSeasons.find((owned) => owned.seasonNumber === season.seasonNumber)?.mediaFormat ??
+            defaultFormat
+          "
+          @change="setFormat(season.seasonNumber, ($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="format in mediaFormats" :key="format.value" :value="format.value">
+            {{ format.value === otherOption ? t('common.other') : format.label }}
+          </option>
+        </select>
+      </SelectControl>
     </div>
   </fieldset>
 </template>
